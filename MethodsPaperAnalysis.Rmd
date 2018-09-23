@@ -1,0 +1,274 @@
+---
+title: "MethodsPaperAnalysis"
+author: "Matt Cannon"
+output: html_document
+---
+
+```{r setup, cache = FALSE, include = FALSE}
+opts_chunk$set(cache = FALSE, fig.height = 10, fig.width = 20)
+```
+
+# Testing samples for parasites
+
+
+## Load libraries
+```{r libraries, cache = FALSE}
+library(ggplot2)
+library(reshape2)
+library(plyr)
+theme_set(theme_bw())
+theme_update(plot.title = element_text(hjust = 0.5))
+```
+
+## Setup
+```{r mkdirs, engine = 'bash', eval = FALSE}
+mkdir output
+mkdir misc
+mkdir output/fastqc
+mkdir output/primersRemoved
+mkdir output/primersRemoved/paired
+mkdir output/primersRemoved/noShort
+mkdir output/pandaseqd
+mkdir output/pandaseqd/noShort
+mkdir output/blastOut
+mkdir output/pandaseqd/noShort/unwanted
+cp ../firstMiseqTest/misc/unculturedOrgs.gi misc/
+```
+
+
+## Parse out raw fastq files
+
+```{r, echo = F, cache = FALSE}
+read_chunk('~/SerreDLab-3/cannonm3/scripts/fastqTools/parseFastqBarcodesDualIndexTemp.pl', labels = 'parseFastqScript')
+```
+```{perl parseFastqScript, eval = FALSE, cache = FALSE}
+```
+
+```{r parseRawFastq, engine = 'bash', eval = FALSE}
+# run from  ~/SerreDLab-3/raw_reads/2017-09-12_UMB/ folder
+perl ~/SerreDLab-3/cannonm3/scripts/fastqTools/parseFastqBarcodesDualIndexTemp.pl -I7  MCHB1_20170908_M01994_IL100092583_NoIndex_L001_R2.fastq.gz -I5  MCHB1_20170908_M01994_IL100092583_NoIndex_L001_R3.fastq.gz -R1  MCHB1_20170908_M01994_IL100092583_NoIndex_L001_R1.fastq.gz -R2  MCHB1_20170908_M01994_IL100092583_NoIndex_L001_R4.fastq.gz --keyFile sampleKey.txt --verbose --errors 0
+
+parallel -j 10 'gzip {}' ::: parsedFastqFiles/*.fastq
+```
+
+## Run pandaseq
+```{r pandaseq, engine = 'bash', eval = FALSE}
+for forward in /home/matthewcannon/SerreDLab-3/raw_reads/2017-09-12_UMB/parsedFastqFiles/[FS]*R1.fastq.gz  
+do 
+  reverse=${forward%%R1.fastq.gz}R2.fastq.gz 
+  base=${forward%%R1.fastq.gz}
+  base=${base##*/}
+  output=${forward%%R1.fastq.gz}.fastq
+  output=${output##*/}
+
+  zcat ${forward} ~/SerreDLab-3/raw_reads/2017-07-07_UMB/parsedFastqFiles/${base}R1.fastq.gz > tempR1.fastq
+  zcat ${reverse} ~/SerreDLab-3/raw_reads/2017-07-07_UMB/parsedFastqFiles/${base}R2.fastq.gz > tempR2.fastq
+  
+  pandaseq -T 30 -F -L 500 -B -f tempR1.fastq -r tempR2.fastq 2> output/pandaseqd/${output}Log.txt | gzip > output/pandaseqd/${output}.gz
+done
+```
+
+
+## Cut primer sequences off of the reads and put primer name in fastq header  
+```{r, echo = F, cache = FALSE}
+read_chunk('~/SerreDLab-2/cannonm3/scripts/CutOffSequenceFromFastqV2.pl', labels = 'trimPrimersScript')
+```
+```{perl trimPrimersScript, eval = FALSE, cache = FALSE}
+```
+
+```{r parseReadPrimers, engine = 'bash', eval = FALSE}
+parallel -j 20 'perl ~/SerreDLab-2/cannonm3/scripts/CutOffSequenceFromFastqV2.pl 15 misc/primerKey.txt {} | gzip > output/primersRemoved/{/}' ::: output/pandaseqd/*fastq.gz
+```
+
+
+## Filter out the short sequences
+```{r, echo = F, cache = FALSE}
+read_chunk('~/SerreDLab-2/cannonm3/scripts/filterShortFastq.pl', labels = 'filterShortScript')
+```
+```{perl filterShortScript, eval = FALSE, cache = FALSE}
+```
+
+```{r filterShortFastq, engine = 'bash', eval = FALSE}
+parallel -j 20 'zcat {} | perl ~/SerreDLab-2/cannonm3/scripts/filterShortFastq.pl 75 | gzip > output/primersRemoved/noShort/{/}' ::: output/primersRemoved/*fastq.gz
+```
+
+
+## Put all the fasta files together 
+Add the sample name to the file and combine.
+```{r blast_format, engine = 'bash', eval = FALSE}
+zcat output/primersRemoved/noShort/*.fastq.gz | zgrep -A 1 @HWI | grep -v "^--" | perl -pe 's/\@HWI/>HWI/' > output/blastOut/merged_products.fa
+```
+
+
+## Get only unique sequences
+```{r, echo = F, cache = FALSE}
+read_chunk('~/SerreDLab-2/cannonm3/scripts/mattsMothur.pl', labels = 'mattsMothurScript')
+```
+```{perl mattsMothurScript, eval = FALSE, cache = FALSE}
+```
+
+```{r mothurMayI, engine = 'bash', eval = FALSE}
+#gunzip -f output/blastOut/merged_products.fa.gz
+perl ~/SerreDLab-2/cannonm3/scripts/mattsMothur.pl output/blastOut/merged_products.fa
+ 
+gawk -F"\t" '{print $2}' output/blastOut/merged_products.names > temp  
+perl -pe s/","/"\t"/g temp > output/blastOut/merged_products.names
+gzip -f output/blastOut/merged_products.names
+gzip -f output/blastOut/merged_products.unique.fasta
+gzip -f output/blastOut/merged_products.fa
+```
+
+## Filter out any sequences seen less than 5 times
+```{r, echo = F, cache = FALSE}
+read_chunk('~/SerreDLab-2/cannonm3/scripts/filterMothurByCount.pl', labels = 'filterMothurScript')
+```
+```{perl filterMothurScript, eval = FALSE, cache = FALSE}
+```
+
+```{r filterMothur, engine = 'bash', eval = FALSE}
+perl ~/SerreDLab-2/cannonm3/scripts/filterMothurByCount.pl 5 output/blastOut/merged_products.names.gz output/blastOut/merged_products.unique.fasta.gz
+
+mv output/merged_products.* output/blastOut/
+#writes out two files: output/blastOut/merged_products.filtered.names  output/blastOut/merged_products.unique.filtered.fa
+```
+
+
+## Blast alignment ##
+=========================================
+The filter environmental samples option on online blast using the Entrez query
+`all [filter] NOT(environmental samples[organism] OR metagenomes[orgn] OR txid32644[orgn])` 
+to remove uncultured samples.  In order to reproduce this I
+ downloaded all the gi's for the query `all [filter] NOT(environmental samples[organism] OR metagenomes[orgn] OR txid32644[orgn])` 
+using a browser and put them in `data/uncultured_samples.gi.gz`. The gi's are then filtered out using the -negative_gilist option.
+
+```{r blast_run, eval = FALSE, engine = 'bash'} 
+blastn -task blastn -negative_gilist ../thirdMiseqBrandyMosq/misc/unculturedOrgs.gi -db /export/databases/blast/nt -query output/blastOut/merged_products.unique.filtered.fa -outfmt 7 -num_threads 40 | gzip > output/blastOut/merged_products-blast.tab.gz
+```
+
+
+## Parse out blast results using the .names file
+```{r, echo = F, cache = FALSE}
+read_chunk('~/SerreDLab-2/cannonm3/scripts/parseBlastWithNameFileSummaryStatsV6.pl', labels = 'parseBlastScript')
+```
+```{perl parseBlastScript, eval = FALSE, cache = FALSE}
+```
+
+```{r parseBlastWithBlastStats, engine = 'bash', eval = FALSE}
+perl ~/SerreDLab-2/cannonm3/scripts/parseBlastWithNameFileSummaryStatsV6.pl output/blastOut/merged_products.filtered.names output/blastOut/merged_products.unique.filtered.fa output/blastOut/merged_products-blast.tab.gz | gzip > output/blastOut/blastGICountsStats.txt.gz 
+         
+zcat output/blastOut/blastGICountsStats.txt.gz | cut -f 3 | sort | uniq > output/blastOut/gis #make up list of unique gis
+```
+
+
+## Get the GI taxonomy information using Jim's primertree package
+```{r getGIdata, eval = FALSE}
+library(primerTree)
+gis <- read.delim("output/blastOut/gis", header = F)
+gis <- subset(gis, V1 != "gi")
+
+taxa <- get_taxonomy(gis$V1)
+
+df <- data.frame(matrix(nrow = nrow(taxa), ncol = 0))
+df$gi <- taxa$gi
+df$species <- taxa$species
+df$kingdom <- taxa$kingdom
+df$phylum <- taxa$phylum
+df$class <- taxa$class
+df$order <- taxa$order
+df$family <- taxa$family
+
+write.table(df, file = "output/blastOut/blastTaxaRaw.txt", quote = F, sep = "\t", col.names = T, row.names = F)
+```
+
+
+## Keep only the first two words in the species names to get rid of subspecies labels
+```{r, echo = F, cache = FALSE}
+read_chunk('~/SerreDLab-2/cannonm3/scripts/fixSpeciesNameCuyahoga.pl', labels = 'fixSpeciesNamesScript')
+```
+```{perl fixSpeciesNamesScript, eval = FALSE, cache = FALSE}
+```
+
+```{r fixSpeciesNames, eval = FALSE, engine = 'bash'}
+perl ~/SerreDLab-2/cannonm3/scripts/fixSpeciesNameCuyahoga.pl output/blastOut/blastTaxaRaw.txt > output/blastOut/blastTaxaRawSpeciesFixed.txt
+```
+
+## Combine the GI read count data with taxa information, but include full taxonomy
+```{r, echo = F, cache = FALSE}
+read_chunk('~/SerreDLab-2/cannonm3/scripts/combineFilesByFirstXColumnsOrdered.pl', labels = 'combineFilesScript')
+```
+```{perl combineFilesScript, eval = FALSE, cache = FALSE}
+```
+
+```{r, echo = F, cache = FALSE}
+read_chunk('~/SerreDLab-2/cannonm3/scripts/uniqueFileByColumnsV1.pl', labels = 'uniqueByColsScript')
+```
+```{perl uniqueByColsScript, eval = FALSE, cache = FALSE}
+```
+
+```{r mergeTaxaInfoSpeciesOnly, engine = 'bash', eval = FALSE}
+# move gi to first column  14 cols
+zcat output/blastOut/blastGICountsStats.txt.gz | gawk -F"\t" 'BEGIN {OFS = "\t"} {print $3,$1,$2,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14}' > temp
+
+###########################   Truncated Species Name
+#combine the prior two files by gi number
+perl ~/SerreDLab-2/cannonm3/scripts/combineFilesByFirstXColumnsOrdered.pl 1 output/blastOut/blastTaxaRawSpeciesFixed.txt temp | cut -f 2- > output/blastOut/blastStatsWithTaxaOutputRedundantSpecies.txt 
+
+# keep only one hit per species
+
+###  Check the four numbers
+perl ~/SerreDLab-2/cannonm3/scripts/uniqueFileByColumnsV1.pl 1,2,3,4,14 output/blastOut/blastStatsWithTaxaOutputRedundantSpecies.txt > output/blastOut/blastStatsWithTaxaOutputUniqueSpecies.txt
+
+# concatenate duplicate hits
+perl ~/SerreDLab-2/cannonm3/scripts/concatenateRepeatReadHitsForBlastV2.pl output/blastOut/blastStatsWithTaxaOutputUniqueSpecies.txt > output/blastOut/blastStatsWithTaxaOutputUniqueSpeciesConcatenated.txt
+
+############################ Normal Species Name
+#combine the prior two files by gi number
+perl ~/SerreDLab-2/cannonm3/scripts/combineFilesByFirstXColumnsOrdered.pl 1 output/blastOut/blastTaxaRaw.txt temp | cut -f 2- | perl -pe 's/.+?:\|//' > output/blastOut/blastStatsWithTaxaOutputRedundantSpeciesFullName.txt 
+
+# keep only one hit per species
+
+
+
+###  Check the four numbers
+perl ~/SerreDLab-2/cannonm3/scripts/uniqueFileByColumnsV1.pl 1,2,3,4,14 output/blastOut/blastStatsWithTaxaOutputRedundantSpeciesFullName.txt > output/blastOut/blastStatsWithTaxaOutputUniqueSpeciesFullName.txt
+
+# concatenate duplicate hits
+perl ~/SerreDLab-2/cannonm3/scripts/concatenateRepeatReadHitsForBlastV2.pl output/blastOut/blastStatsWithTaxaOutputUniqueSpeciesFullName.txt > output/blastOut/blastStatsWithTaxaOutputUniqueSpeciesFullNameConcatenated.txt
+
+
+#keep only those hits with greater than 90% identity
+#gawk -F"\t" 'BEGIN {OFS = "\t"} $5>=90 {print $_}' ~/cannonm3/tempdir/blastStatsWithTaxaOutputUniqueSpecies.txt > ~/cannonm3/tempdir/blastStatsWithTaxaOutputUniqueSpecies90PercentIdentity.txt 
+
+
+cat output/blastOut/merged_products.unique.filtered.fa | perl ~/SerreDLab-2/cannonm3/scripts/fastaSeqLength.pl | perl -pe 's/M.+:.{1,2}\|//g' | perl -pe 's/.DS.+\|//' | gzip  > output/blastOut/merged_products.unique.filtered.fastaLengths.txt.gz
+
+```
+
+
+## Summarize blast table 
+
+```{r summarizeBlastOutTable, eval = FALSE}
+dataDf <- read.delim("output/blastOut/blastStatsWithTaxaOutputUniqueSpeciesFullNameConcatenated.txt", header = T)
+
+dataDf$Sample <- gsub("\\|$", "", dataDf$X.primerSample)
+dataDf$Sample <- gsub(".+\\|", "", dataDf$Sample)
+
+dataDf$Primer <- gsub("\\|.+", "", dataDf$X.primerSample)
+
+dataDf$identity <- gsub("\\/.+", "", dataDf$identity)
+
+dataDf$alignmentlength <- gsub("\\/.+", "", dataDf$alignmentlength)
+
+wantedCols <- c("Primer", "Sample", "count", "identity", "alignmentlength", "species", "kingdom", "phylum", "class", "order", "family")
+
+dataDf <- dataDf[, colnames(dataDf) %in% wantedCols]
+
+summaryDf <- ddply(dataDf, .(Primer, Sample, species, kingdom, phylum, class, order, family), summarize, count = sum(count), maxIdent = max(as.numeric(identity)), maxAlignLen = max(as.numeric(alignmentlength)))
+
+write.table(summaryDf, file = "output/blastOut/blastStatsWithTaxaOutputUniqueSpeciesFullNameConcatenatedSummary.txt", quote = F, sep = "\t", col.names = T, row.names = F)
+```
+
+
+
+
+

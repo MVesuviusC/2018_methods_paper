@@ -1,0 +1,2324 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <meta http-equiv="Content-Style-Type" content="text/css" />
+  <meta name="generator" content="pandoc" />
+  <title>evalPrimerSpecificityParasites</title>
+  <style type="text/css">
+      code{white-space: pre-wrap;}
+      span.smallcaps{font-variant: small-caps;}
+      span.underline{text-decoration: underline;}
+      div.column{display: inline-block; vertical-align: top; width: 50%;}
+  </style>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  <!-- jQuery -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/2.0.3/jquery.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jqueryui/1.10.3/jquery-ui.min.js"></script>
+  
+  <!-- bootstrap -->
+  <!--<link href="https://netdna.bootstrapcdn.com/bootstrap/3.0.0/css/bootstrap.min.css" rel="stylesheet"  id="style">-->
+  <script src="https://netdna.bootstrapcdn.com/bootstrap/3.0.0/js/bootstrap.min.js"></script>
+  
+  <!-- highlight.js -->
+  <!--<link href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/7.3/styles/default.min.css" rel="stylesheet" id="code-style">-->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/7.3/highlight.min.js"></script>
+  <script>
+  hljs.LANGUAGES.r=function(a){var b="([a-zA-Z]|\\.[a-zA-Z.])[a-zA-Z0-9._]*";return{c:[a.HCM,{b:b,l:b,k:{keyword:"function if in break next repeat else for return switch while try tryCatch|10 stop warning require library attach detach source setMethod setGeneric setGroupGeneric setClass ...|10",literal:"NULL NA TRUE FALSE T F Inf NaN NA_integer_|10 NA_real_|10 NA_character_|10 NA_complex_|10"},r:0},{cN:"number",b:"0[xX][0-9a-fA-F]+[Li]?\\b",r:0},{cN:"number",b:"\\d+(?:[eE][+\\-]?\\d*)?L\\b",r:0},{cN:"number",b:"\\d+\\.(?!\\d)(?:i\\b)?",r:0},{cN:"number",b:"\\d+(?:\\.\\d*)?(?:[eE][+\\-]?\\d*)?i?\\b",r:0},{cN:"number",b:"\\.\\d+(?:[eE][+\\-]?\\d*)?i?\\b",r:0},{b:"`",e:"`",r:0},{cN:"string",b:'"',e:'"',c:[a.BE],r:0},{cN:"string",b:"'",e:"'",c:[a.BE],r:0}]}}(hljs); </script>
+  <!--<script type="text/javascript", src="https://yandex.st/highlightjs/7.3/languages/r.min.js"></script>-->
+  
+  <!-- Manific Popup -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/magnific-popup.js/0.8.9/jquery.magnific-popup.min.js"></script>
+  
+  <script type="text/javascript"
+    src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML">
+  </script>
+  <script defer="defer">
+  // Function to generate the dynamic table of contents
+  jQuery.fn.generate_TOC = function () {
+    var base = $(this[0]);
+  
+    var selectors = ['h1', 'h2', 'h3', 'h4'];
+  
+    var last_ptr = [{}, {}, {}, {}];
+  
+    var anchors = {};
+  
+    generate_anchor = function (text) {
+      var test = text.replace(/\W/g, '_');
+  
+      while(test in anchors){
+        //if no suffix, add one
+        if(test.match(/_\d+$/) === null){
+          test = test + "_2";
+        }
+        //else generate unique id for duplicates by adding one to the suffix
+        else {
+          test = test.replace(/_(\d+)$/, function(match, number){ var num=+number+1; return("_" + num) });
+        }
+      }
+      anchors[test]=1;
+      return(test);
+    }
+  
+    $(selectors.join(',')).filter(function(index) { return $(this).parent().attr("id") != 'header'; }).each(function () {
+  
+      var heading = $(this);
+      var idx = selectors.indexOf(heading.prop('tagName').toLowerCase());
+      var itr = 0;
+  
+      while (itr <= idx) {
+        if (jQuery.isEmptyObject(last_ptr[itr])) {
+          last_ptr[itr] = $('<ul>').addClass('nav');
+          if (itr === 0) {
+            base.append(last_ptr[itr])
+          } else {
+            if(last_ptr[itr-1].children('li').length === 0){
+              last_ptr[itr-1].append(last_ptr[itr]);
+            }
+            else {
+              last_ptr[itr - 1].children('li').last().append(last_ptr[itr]);
+            }
+          }
+        }
+        itr++;
+      }
+      var anchor = generate_anchor(heading.text());
+      heading.attr('id', anchor);
+      var a = $('<a>')
+      .text(heading.text())
+      .attr('href', '#' + anchor);
+  
+    var li = $('<li>')
+      .append(a);
+  
+    last_ptr[idx].append(li);
+    for (i = idx + 1; i < last_ptr.length; i++) {
+      last_ptr[i] = {};
+    }
+    });
+  }
+  /* run scripts when document is ready */
+  $(function() {
+    "use strict";
+  
+    var $window = $(window);
+    var $body = $(document.body);
+  
+    /* size of thumbnails */
+  
+    var hidden_types = ['source']
+    var output_types = ['output', 'message', 'warning', 'error']
+  
+    /* style tables */
+    $('table').addClass('table table-striped table-bordered table-hover table-condensed');
+  
+    $('pre code').each(function(i, e) {
+      hljs.highlightBlock(e);
+    });
+  
+    /* Magnific Popup */
+    $(".thumbnail").each(function(){
+      $(this).magnificPopup({
+        disableOn: 768,
+        closeOnContentClick: true,
+  
+        type: 'image',
+        items: {
+          src: $(this).find('img').attr('src'),
+        }
+      });
+    });
+  
+    function toggle_block(obj, show) {
+      var span = obj.find('span');
+      if(show === true){
+        span.removeClass('glyphicon-chevron-up').addClass('glyphicon-chevron-down');
+        obj.next('pre').slideDown();
+      }
+      else {
+        span.removeClass('glyphicon-chevron-down').addClass('glyphicon-chevron-up');
+        obj.next('pre').slideUp();
+      }
+    }
+  
+    function toggle_thumbnails(imgs, show){
+      if(show === true){
+        imgs.parents().show()
+        imgs.slideDown();
+      }
+      else {
+        imgs.slideUp(400, function(){ $(this).parent().hide(); });
+      }
+    }
+  
+    function global_toggle(obj){
+      var type = obj.attr('type');
+      var show = !obj.parent('li').hasClass('active');
+      if(show === true){
+        obj.parent('li').addClass('active');
+      }
+      else{
+        obj.parent('li').removeClass('active');
+      }
+      if(type == 'figure'){
+        toggle_thumbnails($('.thumbnail img'), show);
+      }
+      else {
+        $('.toggle.' + type).each(function() { toggle_block($(this), show); });
+      }
+    }
+  
+    /* onclick toggle next code block */
+    $('.toggle').click(function() {
+      var span = $(this).find('span');
+      toggle_block($(this), !span.hasClass('glyphicon-chevron-down'));
+      return false
+    })
+  
+    // global toggles
+    $('.toggle-global').click(function(){
+      var type = $(this).attr('type');
+      if(type === 'all-source'){
+          $('li a.source').each(function() {
+            global_toggle($(this));
+          });
+        }
+      else if(type === 'all-output'){
+        $.each(output_types, function(i, val){
+          console.log(val);
+          global_toggle($('li a.' + val));
+        });
+      }
+      else {
+        console.log($(this));
+        global_toggle($(this));
+      }
+      return false;
+    });
+    /* table of contents */
+    if($(['h1', 'h2', 'h3', 'h4'].join(',')).length > 0){
+      $('body > #wrap > .container > .row').append('<div class="col-md-2"><div id="toc" class="well sidebar sidenav affix hidden-print"/></div>');
+      $('#toc').generate_TOC();
+    }
+  
+    $.each(hidden_types, function(i, type) {
+      $('li[type=' + type + ']').each(function(){ global_toggle($(this)); });
+    });
+  
+    /* remove paragraphs with no content */
+    $('p:empty').remove();
+  
+    $body.scrollspy({
+      target: '.sidebar',
+    });
+  
+    /* theme switch */
+    $('.theme-switch').click(function(){
+      var css = $('link[title=' + $(this).attr('title') + ']');
+      $('#theme[rel=stylesheet]').attr('href', css.attr('href'));
+      $('.theme-switch').closest('li').removeClass('active');
+      $(this).closest('li').addClass('active');
+      return false;
+    });
+    /* code style switch */ //TODO use same function for both of these?
+    $('.highlight-switch').click(function(){
+      var css = $('link[title="' + $(this).attr('title') + '"]');
+      $('#highlight[rel=stylesheet]').attr('href', css.attr('href'));
+      $('.highlight-switch').closest('li').removeClass('active');
+      $(this).closest('li').addClass('active');
+      return false;
+    });
+  
+    //TODO refresh on show/hide
+    $window.on('load', function () {
+      $body.scrollspy('refresh');
+    })
+  
+  });
+  
+  </script>
+  <style>
+  /* Knitr_bootstrap styles */
+  #header {
+    display: none !important;
+    visibility: hidden !important;
+  }
+  #wrap .container-fluid {
+    padding: 0;
+    overflow: hidden;
+  }
+  .toggle{
+    text-transform: capitalize;
+  }
+  
+  .toggle-global{
+    text-transform: capitalize;
+  }
+  
+  /* Sticky footer styles */
+  * {
+    margin:0;
+  }
+  html,
+  body {
+      height: 100%;
+      padding:0 !important;
+      /* The html and body elements cannot have any padding or margin. */
+      /*overflow-x: hidden;*/
+  }
+  
+  /* Wrapper for page content to push down footer */
+  #wrap {
+      min-height: 100%;
+      height: auto !important;
+      height: 100%;
+      /* Negative indent footer by it's height */
+      margin: 0 auto -120px;
+  }
+  
+  /* Set the fixed height of the footer here */
+  #push,
+  #footer {
+      height: 120px;
+  }
+  
+  #footer {
+    text-align: center;
+  }
+  
+  /* Top level subheader elements.  These are the first nested items underneath a header element. */
+  .header li {
+    font-size: 20px;
+  }
+  
+  /* Makes the font smaller for all subheader elements. */
+  .sub-header li {
+      font-size: 12px;
+  }
+  
+  button.thumbnails {
+    margin-left:0px;
+  }
+  
+  /*
+   * Side navigation
+   *
+   * Scrollspy and affixed enhanced navigation to highlight sections and secondary
+   * sections of docs content.
+   */
+  
+  /* By default it's not affixed in mobile views, so undo that */
+  .sidebar.affix {
+    position: static;
+  }
+  
+  /* First level of nav */
+  .sidenav {
+    margin-top: 30px;
+    margin-bottom: 30px;
+    padding-top:    10px;
+    padding-bottom: 10px;
+    border-radius: 5px;
+  }
+  
+  /* All levels of nav */
+  .sidebar .nav > li > a {
+    display: block;
+    padding: 5px 20px;
+  }
+  .sidebar .nav > li > a:hover,
+  .sidebar .nav > li > a:focus {
+    text-decoration: none;
+    border-right: 1px solid;
+  }
+  .sidebar .nav > .active > a,
+  .sidebar .nav > .active:hover > a,
+  .sidebar .nav > .active:focus > a {
+    font-weight: bold;
+    background-color: transparent;
+    border-right: 1px solid;
+  }
+  
+  /* Nav: second level (shown on .active) */
+  .sidebar .nav .nav {
+    display: none; /* Hide by default, but at >768px, show it */
+    margin-bottom: 8px;
+  }
+  .sidebar .nav .nav > li > a {
+    padding-top:    3px;
+    padding-bottom: 3px;
+    padding-left: 30px;
+    font-size: 90%;
+  }
+  
+  .sidebar .nav .nav .nav > li > a {
+    padding-left: 40px;
+  }
+  .sidebar .nav .nav .nav .nav > li > a {
+    padding-left: 50px;
+  }
+  
+  /* Show and affix the side nav when space allows it */
+  @media screen and (min-width: 992px) {
+    .sidebar .nav > .active > ul {
+      display: block;
+    }
+    /* Widen the fixed sidebar */
+    .sidebar.affix,
+    .sidebar.affix-bottom {
+      width: 213px;
+    }
+    .sidebar.affix-top,
+    .sidebar.affix {
+      position: fixed; /* Undo the static from mobile first approach */
+      top: 30px;
+    }
+    .sidebar.affix-bottom {
+      position: absolute; /* Undo the static from mobile first approach */
+    }
+    .sidebar.affix-bottom .sidenav,
+    .sidebar.affix .sidenav {
+      margin-top: 0;
+      margin-bottom: 0;
+    }
+  }
+  @media screen and (min-width: 1200px) {
+    /* Widen the fixed sidebar again */
+    .sidebar.affix-bottom,
+    .sidebar.affix {
+      width: 263px;
+    }
+  }
+  
+  #toc {
+    padding: 10px 0px;
+    margin:0;
+    border:0;
+  }
+  
+  
+  .panel pre {
+    margin: 0;
+    padding: 0;
+    border: 0;
+  }
+  button + pre {
+    margin: 0;
+    padding: 0;
+  }
+  pre code {
+    border-radius: 0;
+  }
+  /* Magnific Popup CSS */
+  .mfp-bg {
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 1042;
+    overflow: hidden;
+    position: fixed;
+    background: #0b0b0b;
+    opacity: 0.8;
+    filter: alpha(opacity=80); }
+  
+  .mfp-wrap {
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 1043;
+    position: fixed;
+    outline: none !important;
+    -webkit-backface-visibility: hidden; }
+  
+  .mfp-container {
+    text-align: center;
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    left: 0;
+    top: 0;
+    padding: 0 8px;
+    -webkit-box-sizing: border-box;
+    -moz-box-sizing: border-box;
+    box-sizing: border-box; }
+  
+  .mfp-container:before {
+    content: '';
+    display: inline-block;
+    height: 100%;
+    vertical-align: middle; }
+  
+  .mfp-align-top .mfp-container:before {
+    display: none; }
+  
+  .mfp-content {
+    position: relative;
+    display: inline-block;
+    vertical-align: middle;
+    margin: 0 auto;
+    text-align: left;
+    z-index: 1045; }
+  
+  .mfp-inline-holder .mfp-content,
+  .mfp-ajax-holder .mfp-content {
+    width: 100%;
+    cursor: auto; }
+  
+  .mfp-ajax-cur {
+    cursor: progress; }
+  
+  .mfp-zoom-out-cur,
+  .mfp-zoom-out-cur .mfp-image-holder .mfp-close {
+    cursor: -moz-zoom-out;
+    cursor: -webkit-zoom-out;
+    cursor: zoom-out; }
+  
+  .mfp-zoom {
+    cursor: pointer;
+    cursor: -webkit-zoom-in;
+    cursor: -moz-zoom-in;
+    cursor: zoom-in; }
+  
+  .mfp-auto-cursor .mfp-content {
+    cursor: auto; }
+  
+  .mfp-close,
+  .mfp-arrow,
+  .mfp-preloader,
+  .mfp-counter {
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    user-select: none; }
+  
+  .mfp-loading.mfp-figure {
+    display: none; }
+  
+  .mfp-hide {
+    display: none !important; }
+  
+  .mfp-preloader {
+    color: #cccccc;
+    position: absolute;
+    top: 50%;
+    width: auto;
+    text-align: center;
+    margin-top: -0.8em;
+    left: 8px;
+    right: 8px;
+    z-index: 1044; }
+  
+  .mfp-preloader a {
+    color: #cccccc; }
+  
+  .mfp-preloader a:hover {
+    color: white; }
+  
+  .mfp-s-ready .mfp-preloader {
+    display: none; }
+  
+  .mfp-s-error .mfp-content {
+    display: none; }
+  
+  button.mfp-close,
+  button.mfp-arrow {
+    overflow: visible;
+    cursor: pointer;
+    background: transparent;
+    border: 0;
+    -webkit-appearance: none;
+    display: block;
+    padding: 0;
+    z-index: 1046;
+    -webkit-box-shadow: none;
+    box-shadow: none; }
+  
+  button::-moz-focus-inner {
+    padding: 0;
+    border: 0; }
+  
+  .mfp-close {
+    width: 44px;
+    height: 44px;
+    line-height: 44px;
+    position: absolute;
+    right: 0;
+    top: 0;
+    text-decoration: none;
+    text-align: center;
+    opacity: 0.65;
+    padding: 0 0 18px 10px;
+    color: white;
+    font-style: normal;
+    font-size: 28px;
+    font-family: Arial, Baskerville, monospace; }
+    .mfp-close:hover, .mfp-close:focus {
+      opacity: 1; }
+    .mfp-close:active {
+      top: 1px; }
+  
+  .mfp-close-btn-in .mfp-close {
+    color: #333333; }
+  
+  .mfp-image-holder .mfp-close,
+  .mfp-iframe-holder .mfp-close {
+    color: white;
+    right: -6px;
+    text-align: right;
+    padding-right: 6px;
+    width: 100%; }
+  
+  .mfp-counter {
+    position: absolute;
+    top: 0;
+    right: 0;
+    color: #cccccc;
+    font-size: 12px;
+    line-height: 18px; }
+  
+  .mfp-arrow {
+    position: absolute;
+    opacity: 0.65;
+    margin: 0;
+    top: 50%;
+    margin-top: -55px;
+    padding: 0;
+    width: 90px;
+    height: 110px;
+    -webkit-tap-highlight-color: rgba(0, 0, 0, 0); }
+  
+  .mfp-arrow:active {
+    margin-top: -54px; }
+  
+  .mfp-arrow:hover,
+  .mfp-arrow:focus {
+    opacity: 1; }
+  
+  .mfp-arrow:before, .mfp-arrow:after,
+  .mfp-arrow .mfp-b,
+  .mfp-arrow .mfp-a {
+    content: '';
+    display: block;
+    width: 0;
+    height: 0;
+    position: absolute;
+    left: 0;
+    top: 0;
+    margin-top: 35px;
+    margin-left: 35px;
+    border: medium inset transparent; }
+  .mfp-arrow:after,
+  .mfp-arrow .mfp-a {
+    border-top-width: 13px;
+    border-bottom-width: 13px;
+    top: 8px; }
+  .mfp-arrow:before,
+  .mfp-arrow .mfp-b {
+    border-top-width: 21px;
+    border-bottom-width: 21px; }
+  
+  .mfp-arrow-left {
+    left: 0; }
+    .mfp-arrow-left:after,
+    .mfp-arrow-left .mfp-a {
+      border-right: 17px solid white;
+      margin-left: 31px; }
+    .mfp-arrow-left:before,
+    .mfp-arrow-left .mfp-b {
+      margin-left: 25px;
+      border-right: 27px solid #3f3f3f; }
+  
+  .mfp-arrow-right {
+    right: 0; }
+    .mfp-arrow-right:after,
+    .mfp-arrow-right .mfp-a {
+      border-left: 17px solid white;
+      margin-left: 39px; }
+    .mfp-arrow-right:before,
+    .mfp-arrow-right .mfp-b {
+      border-left: 27px solid #3f3f3f; }
+  
+  .mfp-iframe-holder {
+    padding-top: 40px;
+    padding-bottom: 40px; }
+  
+  .mfp-iframe-holder .mfp-content {
+    line-height: 0;
+    width: 100%;
+    max-width: 900px; }
+  
+  .mfp-iframe-scaler {
+    width: 100%;
+    height: 0;
+    overflow: hidden;
+    padding-top: 56.25%; }
+  
+  .mfp-iframe-scaler iframe {
+    position: absolute;
+    display: block;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    box-shadow: 0 0 8px rgba(0, 0, 0, 0.6);
+    background: black; }
+  
+  .mfp-iframe-holder .mfp-close {
+    top: -40px; }
+  
+  /* Main image in popup */
+  img.mfp-img {
+    width: auto;
+    max-width: 100%;
+    height: auto;
+    display: block;
+    line-height: 0;
+    -webkit-box-sizing: border-box;
+    -moz-box-sizing: border-box;
+    box-sizing: border-box;
+    padding: 40px 0 40px;
+    margin: 0 auto; }
+  
+  /* The shadow behind the image */
+  .mfp-figure:after {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 40px;
+    bottom: 40px;
+    display: block;
+    right: 0;
+    width: auto;
+    height: auto;
+    z-index: -1;
+    box-shadow: 0 0 8px rgba(0, 0, 0, 0.6);
+    background: #444444; }
+  
+  .mfp-figure {
+    line-height: 0; }
+  
+  .mfp-bottom-bar {
+    margin-top: -36px;
+    position: absolute;
+    top: 100%;
+    left: 0;
+    width: 100%;
+    cursor: auto; }
+  
+  .mfp-title {
+    text-align: left;
+    line-height: 18px;
+    color: #f3f3f3;
+    word-wrap: break-word;
+    padding-right: 36px; }
+  
+  .mfp-figure small {
+    color: #bdbdbd;
+    display: block;
+    font-size: 12px;
+    line-height: 14px; }
+  
+  .mfp-image-holder .mfp-content {
+    max-width: 100%; }
+  
+  .mfp-gallery .mfp-image-holder .mfp-figure {
+    cursor: pointer; }
+  
+  @media screen and (max-width: 800px) and (orientation: landscape), screen and (max-height: 300px) {
+    /**
+     * Remove all paddings around the image on small screen
+     */
+    .mfp-img-mobile .mfp-image-holder {
+      padding-left: 0;
+      padding-right: 0; }
+  
+    .mfp-img-mobile img.mfp-img {
+      padding: 0; }
+  
+    /* The shadow behind the image */
+    .mfp-img-mobile .mfp-figure:after {
+      top: 0;
+      bottom: 0; }
+  
+    .mfp-img-mobile .mfp-bottom-bar {
+      background: rgba(0, 0, 0, 0.6);
+      bottom: 0;
+      margin: 0;
+      top: auto;
+      padding: 3px 5px;
+      position: fixed;
+      -webkit-box-sizing: border-box;
+      -moz-box-sizing: border-box;
+      box-sizing: border-box; }
+  
+    .mfp-img-mobile .mfp-bottom-bar:empty {
+      padding: 0; }
+  
+    .mfp-img-mobile .mfp-counter {
+      right: 5px;
+      top: 3px; }
+  
+    .mfp-img-mobile .mfp-close {
+      top: 0;
+      right: 0;
+      width: 35px;
+      height: 35px;
+      line-height: 35px;
+      background: rgba(0, 0, 0, 0.6);
+      position: fixed;
+      text-align: center;
+      padding: 0; }
+  
+    .mfp-img-mobile .mfp-figure small {
+      display: inline;
+      margin-left: 5px; } }
+  @media all and (max-width: 900px) {
+    .mfp-arrow {
+      -webkit-transform: scale(0.75);
+      transform: scale(0.75); }
+  
+    .mfp-arrow-left {
+      -webkit-transform-origin: 0;
+      transform-origin: 0; }
+  
+    .mfp-arrow-right {
+      -webkit-transform-origin: 100%;
+      transform-origin: 100%; }
+  
+    .mfp-container {
+      padding-left: 6px;
+      padding-right: 6px; } }
+  .mfp-ie7 .mfp-img {
+    padding: 0; }
+  .mfp-ie7 .mfp-bottom-bar {
+    width: 600px;
+    left: 50%;
+    margin-left: -300px;
+    margin-top: 5px;
+    padding-bottom: 5px; }
+  .mfp-ie7 .mfp-container {
+    padding: 0; }
+  .mfp-ie7 .mfp-content {
+    padding-top: 44px; }
+  .mfp-ie7 .mfp-close {
+    top: 0;
+    right: 0;
+    padding-top: 0; }
+  
+  //Magnific overrides
+  .mfp-image img{
+    background: white;
+  }
+  .mfp-figure:after {
+    background: white;
+  }
+  
+  /*
+   * Off Canvas navbar toggle right
+   * --------------------------------------------------
+   */
+  
+  @media screen and (max-width: 768px) {
+    .row-offcanvas .collapsing {
+    -webkit-transition: none 0;
+      -moz-transition: none 0;
+      transition: none 0;
+    }
+   .row-offcanvas .navbar {
+    position: absolute;
+    z-index: 2;
+      right:0;
+      height:100%;
+      width:55px;
+      border:0;
+      background-color:transparent;
+    }
+    .row-offcanvas .navbar-toggle {
+      margin-right: 5px;
+      margin-left: 5px;
+    }
+    .row-offcanvas {
+      position: relative;
+    }
+    .row-offcanvas-right.active .navbar {
+    position: absolute;
+    z-index: 2;
+      right: -28.4%;
+      width:40%;
+      background-color:#eee;
+      border:0 solid #ddd;
+      border-left-width:1px;
+    }
+    .row-offcanvas-right.active {
+      left: -30%;
+    }
+    .row-offcanvas-right.active .navbar-collapse {
+      position: relative;
+      width: 100%;
+    }
+    .row-offcanvas .content {
+    /*width:calc(100% - 60px);*/
+    }
+  }
+  </style>
+</head>
+<body>
+<div id="header">
+<h1 class="title">evalPrimerSpecificityParasites</h1>
+</div>
+<div id="wrap">
+<div class="container">
+<div class="row row-offcanvas row-offcanvas-right">
+<div class="contents col-xs-12 col-md-10">
+<div class="row">
+<button class="source R toggle btn btn-xs btn-primary">
+<span class="glyphicon glyphicon-chevron-down"></span> R source
+</button>
+<pre style=""><code class="source r">library(ggplot2)
+library(reshape2)
+library(plyr)
+library(primerTree)
+library(ape)
+theme_set(theme_bw())
+theme_update(plot.title = element_text(hjust = 0.5))</code></pre>
+</div>
+<div class="row">
+<button class="source bash toggle btn btn-xs btn-primary">
+<span class="glyphicon glyphicon-chevron-down"></span> bash source
+</button>
+<pre style=""><code class="source bash">mkdir output
+mkdir output/primerTreeObj
+mkdir output/figures
+mkdir output/sequences
+mkdir output/sequences/trimmed
+mkdir output/sequences/unique
+mkdir output/taxonomy
+mkdir output/blast
+mkdir output/blast/taxa
+mkdir output/blast/taxa/splitInput
+mkdir output/blast/taxa/splitOutput
+mkdir output/blast/topParsed
+mkdir output/blast/potentialHits
+mkdir misc
+mkdir output/unrestrictedPrimerTree/
+mkdir output/unrestrictedPrimerTree/primerTreeObj
+mkdir output/unrestrictedPrimerTree/figures
+mkdir output/unrestrictedPrimerTree/taxonomy
+mkdir output/unrestrictedPrimerTree/sequences
+mkdir output/unrestrictedPrimerTree/taxonomy/species
+mkdir output/summaryTable</code></pre>
+</div>
+<h1 id="evaluation-of-metabarcoding-primers">Evaluation of metabarcoding primers</h1>
+<p>Characterization of the specificity and taxonomic accuracy of metabarcoding primers.</p>
+<p>Need to be sure the primerTree results are run alongside a current version of the local blast database. Otherwise, you can either get primerTree results that aren’t in the local blast database and you get more found than potential hits. Or you can get primerTree results that are for gis that have been subsequently updated, and so the taxonomy is no longer available, again, resulting in more found than potential hits.</p>
+<h2 id="show-primer-input-file">Show primer input file</h2>
+<div class="row">
+<button class="source bash toggle btn btn-xs btn-primary">
+<span class="glyphicon glyphicon-chevron-down"></span> bash source
+</button>
+<pre style=""><code class="source bash">cat primerInputParasites.txt</code></pre>
+<button class="output bash toggle btn btn-xs btn-success">
+<span class="glyphicon glyphicon-chevron-down"></span> bash output
+</button>
+<pre style=""><code class="output bash">Apicomplexa18S_365_F   GACCTATCAGCTTTCGACGG    613_R   CCCTCCAATTGWTACTCTGGR   Apicomplexa Mine    150 500
+Blastocystis18S_F   TGGTCGCAAGGCTGAAACTT    R   TTGCCTCCAGCTTCCCTACA    Blastocystis    Mine    150 500
+Kinetoplastida_18S_4    AAATTAAACCGCACGCTCCA    R   GCAAACGATGACACCCATGA    Kinetoplastida  Mine    150 500
+Microsporidia_18S_F BCAGGTTGATTCTGCCTGACR   R   ACCAGWCTTGCCCTCCARTT    Microsporidia   Mine    150 500
+Parabasalia18S_288_F    TAGGCTATCACGGGTAACGG    654_R   GCGTCCTGATTTGTTCACAG    Parabasalia Mine    150 500
+Plasmodium18S_883_F TGYGTTTGAATACTAYAGCATGG 1126_R  TCTGATCGTCTTCACTCCCTT   Apicomplexa Mine    150 500
+Spirurida18S_1435_F CACCCGTGAGGATTGACAG 1858_R  CGATCACGGAGGATTTTCAA    Nematoda    Mine    150 500
+Spirurida18S_F2 CGTCATTGCTGCGGTTAAAA    R2  CCGTCCTTCGAACCTCTGAC    Nematoda    Mine    150 500
+Trichocephalida18S2_F   AGTGGAGCATGCGGCTTAAT    R   TGCAATTCCCTRTCCCAGTC    Nematoda    Mine    150 500
+Eimeriorina18S_302_F    TTGGMCTACCGTGGCARTGA    730_R   TCAAGGCAAHWGCCTGCTT Apicomplexa Mine    150 500
+Diplomonadida_768_F RGGGACRGGTGAAATAGGATG   1059_R  CAAATTGAGCCGCAGACTCC    Diplomonadida   Mine    150 500
+Amoebozoa_18S_2 GAATTGACGGAAGGGCACAC    R   GCCCYRTCTAAGGGCATCAC    Amoebozoa   Mine    150 500
+Platyhelminthes_18S3_F  CAATTGGAGGGCAAGTCTGG    3R  TGCTTTCGCWKTAGTTTGTCTG  Platyhelminthes Mine    150 500
+Amoebozoa_Ami6F1    CCAGCTCCAATAGCGTATATT   Ami9R   GTTGAGTCGAATTAAGCCGC    Amoebozoa   Hamad_et_al_2012    500 2500
+Bacillariophyta_18SF    GTTTCCGTAGGTGAACCTGC    28SR    GCTTATTAATATGCTTAAATTCAGCG  Bacillariophyta Hamad_et_al_2012    500 2500
+Chlorophyta_UCP1_F  CAAGCWCCDGCAGAAGACC UCP1_R  CCMAAACATAAACAAMSWCAGG  Chlorophyta Hamad_et_al_2012    150 2500
+Ciliophora_121F CTGCGAATGGCTCATTAMAA    1147R   GACGGTATCTRATCGTCTTT    Ciliophora  Hamad_et_al_2012    500 1500
+Dinophyceae_18ScomF1    GCTTGTCTCAAAGATTAAGCCATGC   Dino18SR1   GAGCCAGATRCDCACCCA  Dinophyceae Hamad_et_al_2012    150 1000
+Diplomonadida_DimA  AACCTGGTTGATCTTGCCAG    DimB    CYGCAGGTTCACCTACGGAA    Diplomonadida   Hamad_et_al_2012    500 2500
+Entamoeba_JVF   GTTGATCCTGCCAGTATTATATG DSPR2   CACTATTGGAGCTGGAATTAC   Entamoeba   Hamad_et_al_2012    100 2500
+#Euglenophyta_EAF   GTCATATGCTTYKTTCAAGGRCTAAGCC    EAF3    TCGACAATCTGGTTGATCCTGCCAG   Euglenida   Hamad_et_al_2012    100 10000
+Eukaryota_1391F GTACACACCGCCCGTC    EukB    TGATCCTTCTGCAGGTTCACCTAC    Eukaryota   Stoeck_et_al_2010   100 500
+Eukaryota_E528F CGGTAATTCCAGCTCC    Univ1391RE  ACCTTGTTACGRCTT Eukaryota   Hamad_et_al_2012    500 2500
+Eukaryota_E528F CGGTAATTCCAGCTCC    Univ1492RE  GGGCGGTGTGTACAARGRG Eukaryota   Hamad_et_al_2012    500 2500
+Eukaryota_EK1F  CTGGTTGATCCTGCCAG   EK-1520 CYGCAGGTTCACCTAC    Eukaryota   Hamad_et_al_2012    500 1000
+Eukaryota_EK-82F    GAAACTGCGAATGGCTC   EK-1520 CYGCAGGTTCACCTAC    Eukaryota   Hamad_et_al_2012    500 2500
+Eukaryota_Euk1A CTGGTTGATCCTGCCAG   Euk516r ACCAGACTTGCCCTCC    Eukaryota   Hamad_et_al_2012    500 1000
+Eukaryota_EUKA  AACCTGGTTGATCCTGCCAGT   EUKB    TGATCCTTCTGCAGGTTCACCTAC    Eukaryota   Hamad_et_al_2012    500 2500
+Eukaryota_F-566 CAGCAGCCGCGGTAATTCC R-1200  CCCGTGTTGAGTCAAATTAAGC  Eukaryota   Hadziavdic_et_al_2014   500 2500
+Eukaryota_FUNF  GATCCCTAGTCGGCATAGTT    FUNR    GTAGTCATATGCTTGTCTC Eukaryota   Hamad_et_al_2012    500 2500
+Eukaryota_NSI   GTAGTCATATGCTTGTCTC FR1 AICCATTCAATCGGTAIT  Eukaryota   Hamad_et_al_2012    500 2500
+Eukaryota_TAReuk454FWD1 CCAGCASCYGCGGTAATTCC    TAReukREV3  ACTTTCGTTCTTGATYRA  Eukaryota   Stoeck_et_al_2010   150 1000
+Eukaryota_Uni18SF   AGGGCAAKYCTGGTGCCAGC    Uni18SR GRCGGTATCTRATCGYCTT Eukaryota   zhan_et_al_2013 150 1000
+Fungi_ITSF  CTTGGTCATTTAGAGGAAGTAA  ITS-4R  TCCTCCGCTTATTGATATGC    Fungi   Hamad_et_al_2012    150 1500
+Kinetoplastidia_Kineto_kin1 GCGTTCAAAGATTGGGCAAT    Kineto_kin2 CGCCCGAAAGTTCACC    Kinetoplastida  Hamad_et_al_2012    150 1000
+Microsporidia_V1    CACCAGGTTGATTCTGCCTGAC  PMP2    CCTCTCCGGAACCAAACCCTG   Microsporidia   Hamad_et_al_2012    150 500
+Rhodophyta_RUBI_F   CGCTGCTAAAACTTGTGGGC    RUBI_R  GGCGTTGTAATAAGAATCCTGG  Rhodophyta  Hamad_et_al_2012    150 1000
+Trichomonadida_TFR1 TGCTTCAGTTCAGCGGGTCTTCC TFR2    CGGTAGGTGAACCTGCCGTTGG  Trichomonadida  Hamad_et_al_2012    150 1000
+</code></pre>
+</div>
+<h2 id="run-primertree-on-all-the-primers-limited-to-target-taxa">Run primerTree on all the primers limited to target taxa</h2>
+<p>This data is used for several calculations: - Primer taxonomic specificity - Calculation of the proportion of on-target hits - Calculation of the proportion of possible targets that are actually amplifiable - Visual display of primer coverage - Amplicon length distribution</p>
+<p>Min and max amplicon length is used to avoid very short and very long sequences messing up the alignment. The values are chosen based on information from the original publication and preliminary primerTree runs without length limits to define the normal range of amplicon lengths</p>
+<p>Used primerTree version from my github that included min_length and max_length options</p>
+<div class="row">
+<button class="source R toggle btn btn-xs btn-primary">
+<span class="glyphicon glyphicon-chevron-down"></span> R source
+</button>
+<pre style=""><code class="source r">primers <- read.delim("primerInputParasites.txt", header = F, comment.char = "#")
+
+doneFiles <- list.files(path = "output/primerTreeObj/", pattern = "_primerTree.RData")
+doneFiles <- as.character(lapply(doneFiles, function(x) gsub("_primerTree.RData", "", x)))
+
+for(i in 1:nrow(primers)) {
+  fwd <- as.character(primers[i, 2])
+  rev <- as.character(primers[i, 4])
+  target <- as.character(primers[i, 5])
+  min_len <- primers[i, 7]
+  max_len <- primers[i, 8]
+  
+  lab <- as.character(paste(primers[i, 1], primers[i,3], sep = "_"))
+
+  print(lab)
+ 
+  if(lab %in% doneFiles) {
+    load(paste("output/primerTreeObj/", lab, "_primerTree.RData", sep = ""))
+  } else {
+    primTree <- search_primer_pair(forward = fwd,
+                                 reverse = rev,
+                                 name = lab,
+                                 num_aligns = 10000,
+                                 num_permutations = 150,
+                                 min_length = min_len,
+                                 max_length = max_len,
+                                 organism = target)
+
+    assign(lab, primTree)
+    save(list = (as.character(lab)), file = paste("output/primerTreeObj/", lab, "_primerTree.RData", sep = ""))
+  
+    if(length(names(get(lab))) == 9) {
+        taxonomy <- get(lab)$taxonomy
+      write.table(taxonomy, file = paste("output/taxonomy/", lab, "_taxonomy.txt", sep = ""), 
+                quote = F, 
+                sep = "\t", 
+                col.names = T, 
+                row.names = F)
+  
+        sequences <- get(lab)$sequence
+        write.dna(sequences, file = paste("output/sequences/", lab, "_sequences.fasta", sep = ""), 
+                format = "fasta")
+    
+      if(length(names(get(lab)$sequence)) > 5) {
+        png(filename = paste("output/figures/", lab, "_primerTree.png", sep = ""), 
+              width = 4000, 
+              height = 4000, 
+              res = 300)
+
+        print(plot(get(lab), size = 1, main = paste(lab, " primers", sep = "")))
+       
+        dev.off()
+        
+        seqLength <- as.data.frame(seq_lengths(get(lab)))
+        colnames(seqLength) <- c("Length", "Count")
+        seqLength$Length <- as.numeric(as.character(seqLength$Length))
+
+        png(filename = paste("output/figures/", lab, "_SeqLens.png", sep = ""), 
+              width = 4000, 
+              height = 4000, 
+              res = 300)
+
+        print(
+          ggplot(seqLength, aes(x = Length, y = Count)) + 
+            geom_bar(stat = "identity") +
+            theme(text = element_text(size = 20)) +
+            ggtitle(paste(lab, " primers amplicon length\n", sep = ""))
+        )
+        dev.off()
+      }
+    }
+  }
+  
+  rm(list = ls(pattern = lab))
+}</code></pre>
+</div>
+<h2 id="assessing-how-many-species-a-given-sequence-can-be-assigned-to-equally">Assessing how many species a given sequence can be assigned to equally</h2>
+<p>The idea here is to take the sequences retrieved by primerTree and blast them, then take all equal blast hits and count how many species/genera/families are represented for each query sequence. This will allow the calculation of averages and the distribution of these counts.</p>
+<h3 id="trim-the-primer-sequences-off-of-the-sequences-pulled-out-of-primertree">Trim the primer sequences off of the sequences pulled out of primerTree</h3>
+<div class="row">
+
+</div>
+<div class="row">
+<button class="source perl toggle btn btn-xs btn-primary">
+<span class="glyphicon glyphicon-chevron-down"></span> perl source
+</button>
+<pre style=""><code class="source perl">#!/usr/bin/perl
+use warnings;
+use strict;
+use Getopt::Long;
+use Pod::Usage;
+
+##############################
+# By Matt Cannon
+# Date: 
+# Last modified: 
+# Title: .pl
+# Purpose: 
+##############################
+
+##############################
+# Options
+##############################
+
+
+my $verbose;
+my $help;
+my $fastaInput;
+my $primers;
+
+# i = integer, s = string
+GetOptions ("verbose"           => \$verbose,
+            "help"              => \$help,
+            "fastaInput=s"  => \$fastaInput,
+            "primers=s"         => \$primers
+      )
+ or pod2usage(0) && exit;
+
+pod2usage(1) && exit if ($help);
+
+
+##############################
+# Global variables
+##############################
+my %primerHash;
+
+##############################
+# Code
+##############################
+
+##############################
+### Get sequences to trim and deconvolute ambiguous bases
+
+open PRIMERS, $primers or die "Could not open file of primer sequences to trim\n";
+
+while (my $input = <PRIMERS>){
+    chomp $input;
+    my ($name1, $forward, $name2, $reverse) = split "\t", $input;
+    $primerHash{$name1 . "_" . $name2}{forward} = length($forward);
+    $primerHash{$name1 . "_" . $name2}{reverse} = (-1 * length($reverse));
+}
+
+##############################
+### 
+
+$/ = "\n>";
+open SEQS, $fastaInput or die "Could not open fasta input\n";
+while (my $input = <SEQS>){
+    chomp $input;
+    my $filename = $fastaInput;
+    $filename =~ s/_sequences.fasta//;
+    $filename =~ s/.+\///;
+    my ($header, @seqArray) = split "\n", $input;
+    $header =~ s/^>//; # replace ">" in first fasta entry
+    my $sequence = join("", @seqArray);
+    $sequence =~ s/[\s\t-]//g;
+    $sequence = uc($sequence);
+    if($sequence ne "NA") {
+    $sequence = substr($sequence, $primerHash{$filename}{forward});
+    $sequence = substr($sequence, 0, $primerHash{$filename}{reverse});
+
+    print ">", $header, "\n", $sequence, "\n";
+    }
+}
+$/ = "\n";
+close SEQS;
+
+###
+##############################
+
+##############################
+# POD
+##############################
+
+#=pod
+    
+=head SYNOPSIS
+
+Summary:    
+    
+    xxxxxx.pl - generates a consensus for a specified gene in a specified taxa
+    
+Usage:
+
+    perl xxxxxx.pl [options] 
+
+
+=head OPTIONS
+
+Options:
+
+    --verbose
+    --help
+
+=cut</code></pre>
+</div>
+<div class="row">
+<button class="source bash toggle btn btn-xs btn-primary">
+<span class="glyphicon glyphicon-chevron-down"></span> bash source
+</button>
+<pre style=""><code class="source bash">for file in output/sequences/*.fasta
+do
+  base=${file##*/}
+  perl ../misc/trimFastaByPrimerLength.pl --fasta ${file} --primers primerInputParasites.txt > output/sequences/trimmed/${base}
+done</code></pre>
+</div>
+<h3 id="keep-a-single-copy-of-each-sequence-per-species-to-avoid-massive-skew-of-the-data.">Keep a single copy of each sequence per species to avoid massive skew of the data.</h3>
+For example, 200 identical human sequences
+<div class="row">
+
+</div>
+<div class="row">
+<button class="source perl toggle btn btn-xs btn-primary">
+<span class="glyphicon glyphicon-chevron-down"></span> perl source
+</button>
+<pre style=""><code class="source perl">#!/usr/bin/perl
+use warnings;
+use strict;
+use Getopt::Long;
+use Pod::Usage;
+
+
+##############################
+# By Matt Cannon
+# Date:
+# Last modified:
+# Title: .pl
+# Purpose:
+##############################
+
+##############################
+# Options
+##############################
+
+
+my $verbose;
+my $help;
+my $taxa;
+my $fasta;
+
+# i = integer, s = string
+GetOptions ("verbose"           => \$verbose,
+            "help"              => \$help,
+        "taxonomy=s"        => \$taxa,
+        "fasta=s"           => \$fasta
+
+      )
+ or pod2usage(0) && exit;
+
+pod2usage(1) && exit if ($help);
+
+
+##############################
+# Global variables
+##############################
+my $taxaHeader;
+my @taxaCols;
+my $giCol;
+my $speciesCol;
+my %taxaHash;
+my %seqHash;
+
+##############################
+# Code
+##############################
+
+
+##############################
+### Pull in taxa file and make hash -> $hash{gi} = species
+### More stuff
+
+open TAXAFILE, "$taxa" or die "Could not open taxonomy input\nWell, crap\n";
+$taxaHeader = <TAXAFILE>;
+chomp $taxaHeader;
+@taxaCols = split "\t", $taxaHeader;
+
+for(my $i = 0; $i < scalar(@taxaCols); $i++) {
+    $giCol = $i if $taxaCols[$i] eq "gi";
+    $speciesCol = $i if $taxaCols[$i] eq "species";
+}
+
+while (my $input = <TAXAFILE>){
+    chomp $input;
+    my @cols = split "\t", $input;
+    if($cols[$speciesCol] !~ /sp\.|isol\.|isolate|cf\./) {
+    $taxaHash{$cols[$giCol]} = $cols[$speciesCol];
+    } 
+}
+
+
+
+##############################
+### Pull in fasta file and keep one entry for each species:sequence combo
+### More stuff
+local $/ = "\n>";
+open FASTAFILE, "$fasta" or die "Could not open fasta input\nWell, crap\n";
+while (my $input = <FASTAFILE>){
+    chomp $input;
+    $input =~ s/^>//;
+    my ($header, @rawSequence) = split "\n", $input;
+    my $seq = join("", @rawSequence);
+    $seq =~ s/[\t\s]//g;
+    $seq = uc($seq);
+    if(exists($taxaHash{$header})) {
+    my $species = $taxaHash{$header};
+    if(!exists($seqHash{$species . $seq})) {
+        print ">", $header, "\n", $seq, "\n";
+        $seqHash{$species . $seq} = 1;
+    }
+    }
+}
+
+
+##############################
+# POD
+##############################
+
+#=pod
+
+=head SYNOPSIS
+
+Summary:
+
+    xxxxxx.pl - generates a consensus for a specified gene in a specified taxa
+
+Usage:
+
+    perl xxxxxx.pl [options]
+
+
+=head OPTIONS
+
+Options:
+
+    --verbose
+    --help
+
+=cut</code></pre>
+</div>
+<div class="row">
+<button class="source bash toggle btn btn-xs btn-primary">
+<span class="glyphicon glyphicon-chevron-down"></span> bash source
+</button>
+<pre style=""><code class="source bash">for file in output/sequences/trimmed/*.fasta
+do
+  base=${file##*/}
+  base=${base%sequences.fasta}
+  perl ../misc/uniqueFastaBySpeciesSeq.pl \
+      --tax output/taxonomy/${base}taxonomy.txt \
+      --fasta ${file} \
+    > output/sequences/unique/${base}sequences.fasta
+done</code></pre>
+</div>
+<h3 id="blast-each-sequence-against-nr-database">Blast each sequence against nr database</h3>
+<p>Uncultured organism gis obtained from NCBI using the search: <code>(&quot;environmental samples&quot;[organism] OR metagenomes[orgn] OR txid32644[orgn])</code></p>
+<p>BLAST nt and taxdb databases downloaded 9-5-18 /usr/local/packages/perl-5.22.2/bin/perl /usr/local/packages/ncbi-blast-2.2.31+/bin/update_blastdb.pl –decompress –force –verbose nt</p>
+<div class="row">
+<button class="source bash toggle btn btn-xs btn-primary">
+<span class="glyphicon glyphicon-chevron-down"></span> bash source
+</button>
+<pre style=""><code class="source bash">cat blast.sh </code></pre>
+<button class="output bash toggle btn btn-xs btn-success">
+<span class="glyphicon glyphicon-chevron-down"></span> bash output
+</button>
+<pre style=""><code class="output bash">#!/bin/bash
+#$ -cwd
+#$ -P dserre-lab
+#$ -o blastQsubStdOut.txt
+#$ -e blastQsubStdErr.txt
+#$ -l mem_free=0.10G
+#$ -q threaded.q
+#$ -pe thread 30
+#$ -N blast
+##$ -sync y
+#$ -t 1-37
+#$ -tc 5
+
+declare -a fileList=("Amoebozoa_18S_2_R_" "Amoebozoa_Ami6F1_Ami9R_" "Apicomplexa18S_365_F_613_R_" "Bacillariophyta_18SF_28SR_" "Blastocystis18S_F_R_" "Chlorophyta_UCP1_F_UCP1_R_" "Ciliophora_121F_1147R_" "Dinophyceae_18ScomF1_Dino18SR1_" "Diplomonadida_768_F_1059_R_" "Diplomonadida_DimA_DimB_" "Eimeriorina18S_302_F_730_R_" "Entamoeba_JVF_DSPR2_" "Eukaryota_1391F_EukB_" "Eukaryota_E528F_Univ1391RE_" "Eukaryota_E528F_Univ1492RE_" "Eukaryota_EK1F_EK-1520_" "Eukaryota_EK-82F_EK-1520_" "Eukaryota_Euk1A_Euk516r_" "Eukaryota_EUKA_EUKB_" "Eukaryota_F-566_R-1200_" "Eukaryota_FUNF_FUNR_" "Eukaryota_NSI_FR1_" "Eukaryota_TAReuk454FWD1_TAReukREV3_" "Eukaryota_Uni18SF_Uni18SR_" "Fungi_ITSF_ITS-4R_" "Kinetoplastida_18S_4_R_" "Kinetoplastidia_Kineto_kin1_Kineto_kin2_" "Microsporidia_18S_F_R_" "Microsporidia_V1_PMP2_" "Parabasalia18S_288_F_654_R_" "Plasmodium18S_883_F_1126_R_" "Platyhelminthes_18S3_F_3R_" "Rhodophyta_RUBI_F_RUBI_R_" "Spirurida18S_1435_F_1858_R_" "Spirurida18S_F2_R2_" "Trichocephalida18S2_F_R_" "Trichomonadida_TFR1_TFR2_")
+
+/usr/local/packages/ncbi-blast+-2.7.1/bin/blastn \
+  -task blastn \
+  -negative_gilist ~/SerreDLab-3/cannonm3/unculturedOrgs_8_16_18.gi \
+  -db ~/SerreDLab-3/databases/blast/nt \
+  -query output/sequences/unique/${fileList[${SGE_TASK_ID} - 1]}sequences.fasta \
+  -num_threads 30 \
+  -outfmt "7 qseqid sgi evalue length qlen sstart send slen score" \
+  -max_hsps 1 \
+  -max_target_seqs 10000 \
+    > output/blast/${fileList[${SGE_TASK_ID} - 1]}blastResults.txt
+</code></pre>
+</div>
+<div class="row">
+<button class="source bash toggle btn btn-xs btn-primary">
+<span class="glyphicon glyphicon-chevron-down"></span> bash source
+</button>
+<pre style=""><code class="source bash">qsub blast.sh </code></pre>
+</div>
+<h3 id="pull-hit-gi-number-out-of-the-blast-results">Pull hit GI number out of the BLAST results</h3>
+<div class="row">
+<button class="source bash toggle btn btn-xs btn-primary">
+<span class="glyphicon glyphicon-chevron-down"></span> bash source
+</button>
+<pre style=""><code class="source bash">for file in output/blast/*blastResults.txt
+do
+   base=${file##*/}   
+   base=${base%blastResults.txt}
+   cat ${file} | grep -v "#" | cut -f 2,2 | perl -pe 's/gi.//' | perl -pe 's/\|.+//' | sort | uniq > output/blast/giIntermediate${base}.txt
+done
+
+cat output/blast/giIntermediate*.txt | sort | uniq > output/blast/gis.txt</code></pre>
+</div>
+<h3 id="get-taxonomy-information-from-ncbi">Get taxonomy information from NCBI</h3>
+<div class="row">
+
+</div>
+<div class="row">
+<button class="source perl toggle btn btn-xs btn-primary">
+<span class="glyphicon glyphicon-chevron-down"></span> perl source
+</button>
+<pre style=""><code class="source perl">#!/usr/bin/perl
+use warnings;
+use strict;
+use Getopt::Long;
+use Pod::Usage;
+use XML::Simple;
+use Data::Dumper;
+
+##############################
+# By Matt Cannon
+# Date: 
+# Last modified: 
+# Title: .pl
+# Purpose: 
+##############################
+
+##############################
+# Options
+##############################
+
+
+my $verbose;
+my $help;
+my $input;
+my $ranks = "kingdom, phylum, class, order, family, genus";
+my $queryNum = 100; 
+
+# i = integer, s = string
+GetOptions ("verbose"           => \$verbose,
+            "help"              => \$help,
+            "input=s"       => \$input,
+        "ranks=s"           => \$ranks,
+        "queryNum=i"        => \$queryNum
+      )
+ or pod2usage(0) && exit;
+
+pod2usage(1) && exit if ($help);
+
+
+##############################
+# Global variables
+##############################
+my $gi2tax = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/elink.fcgi?dbfrom=nuccore&db=taxonomy&id=";
+my $taxQuery = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi?db=taxonomy&retmode=xml&id=";
+my @classesToGet;
+my @giList;
+#my %gi2TaxHash;
+#my %taxaHash; 
+my $counter = 1;
+
+##############################
+# Code
+##############################
+
+
+##############################
+### Stuff
+### More stuff
+$ranks =~ s/\s//g;
+$ranks = lc($ranks);
+@classesToGet = split(",", $ranks);
+
+print "gi\tspecies\t", join "\t", @classesToGet, "\n";
+
+open INPUT1FILE, "$input" or die "Could not open input\nWell, crap\n";
+while (my $gi = <INPUT1FILE>){
+    chomp $gi;
+    push @giList, $gi;
+}
+    
+while(scalar(@giList) > 0) {
+    my %gi2TaxHash;
+    my %taxaHash; 
+
+    my @gisToQuery;
+#    if(scalar(@giList) > $queryNum) {
+    @gisToQuery = splice @giList, 0, $queryNum;
+#    } else {
+#   @gisToQuery = splice @giList, 0, scalar(@giList);
+#    }
+
+    if($verbose) {
+    my $oldCounter = $counter; 
+        $counter += scalar(@gisToQuery);
+        print STDERR "Finding taxa for gis#", $oldCounter, "through ", $counter, "\n";
+    }
+
+    if($verbose) {
+    print STDERR "Submitting gi to taxid query to NCBI\n";
+    }
+    my $gi2taxSearch = "GET \"" . $gi2tax . join("&id=", @gisToQuery) . "\"";
+    my $gi2taxResponse = `$gi2taxSearch`;
+    if($verbose) {
+    print STDERR "Query retrieved\nParsing\n";
+    }
+    my @taxQuery; 
+    if($gi2taxResponse !~ /ERROR/) {
+    my $giXML = XMLin($gi2taxResponse, forceArray => ['LinkSet', 'Link']);
+    for(my $i = 0; $i < scalar(@{ $giXML->{LinkSet} }); $i++) {
+        my $giNum = $giXML->{LinkSet}[$i]{IdList}{Id};
+        my $taxId = $giXML->{LinkSet}[$i]{LinkSetDb}{Link}[0]{Id}; 
+                # In cases where there are two taxids listed, keep the first. 
+            # This is rare and annoying when it happens. I may change the behaviour
+            # in the future to output all taxa info for each gi.
+        if(defined($taxId)) {
+        $gi2TaxHash{$giNum} = $taxId;
+        push @taxQuery, $taxId;
+        } else {
+        print STDERR "Gi# ", $giNum, " has no available taxonomy\n";
+        }
+    }
+    } else {
+    print STDERR "Error in gi2tax id query\n";
+    die;
+    }
+
+    if($verbose) {
+    print STDERR "Submitting taxonomy query to NCBI\n";
+    }
+    my $taxSearch = "GET \"" . $taxQuery . join("&id=", @taxQuery) . "\"";
+    if($verbose) {
+    print STDERR "Query retrieved\nParsing\n";
+    }
+    my $taxResponse = `$taxSearch`;
+    if($taxResponse !~ /ERROR/) {
+    my $taxaXML = XMLin($taxResponse, forceArray => ['Taxon']);
+    #print Dumper($taxaXML); 
+    #die;
+    for(my $i = 0; $i < scalar(@{ $taxaXML->{Taxon} }); $i++) {
+        my $taxId = $taxaXML->{Taxon}[$i]{TaxId};
+        for(my $j = 0; $j < scalar(@{ $taxaXML->{Taxon}[$i]{LineageEx}{Taxon} }); $j++) {
+        $taxaHash{$taxId}{species} = $taxaXML->{Taxon}[$i]{ScientificName};
+        for my $rank (@classesToGet) {
+            if($rank eq $taxaXML->{Taxon}[$i]{LineageEx}{Taxon}[$j]{Rank}) {
+            $taxaHash{$taxId}{$rank} = $taxaXML->{Taxon}[$i]{LineageEx}{Taxon}[$j]{ScientificName};
+            #$taxaHash{$taxId}{ $taxaXML->{Taxon}[$i]{LineageEx}{Taxon}[$j]{Rank} } = $taxaXML->{Taxon}[$i]{LineageEx}{Taxon}[$j]{ScientificName};
+            }
+        }
+        }
+    }
+    } else {
+    print STDERR "Error in taxa query\n";
+    die;
+    }
+    if($verbose) {
+    print STDERR "Printing results\n";
+    }
+    for my $giNum (keys %gi2TaxHash) {
+    my $taxId = $gi2TaxHash{$giNum};
+    if(exists($taxaHash{$taxId})) {
+        print $giNum;
+        print "\t", $taxaHash{$taxId}{species};
+        for my $rank (@classesToGet) {
+        if(exists($taxaHash{$taxId}{$rank})) {
+            print "\t", $taxaHash{$taxId}{$rank};
+        } else {
+            print "\tNA";
+        }
+        }
+        print "\n";
+    }
+    }
+}
+
+exit;
+
+##############################
+# POD
+##############################
+
+#=pod
+    
+=head SYNOPSIS
+
+Summary:    
+    
+    xxxxxx.pl - generates a consensus for a specified gene in a specified taxa
+    
+Usage:
+
+    perl xxxxxx.pl [options] 
+
+
+=head OPTIONS
+
+Options:
+
+    --verbose
+    --help
+
+=cut</code></pre>
+</div>
+<div class="row">
+<button class="source bash toggle btn btn-xs btn-primary">
+<span class="glyphicon glyphicon-chevron-down"></span> bash source
+</button>
+<pre style=""><code class="source bash">rm output/blast/taxa/splitInput/splitTaxa_* 
+split -a 4 -d output/blast/gis.txt output/blast/taxa/splitInput/splitTaxa_
+  
+parallel -j 20 '/usr/local/packages/perl-5.22.2/bin/perl ~/SerreDLab-2/cannonm3/scripts/getTaxa/getTaxa.pl --input {} --ranks "superkingdom, kingdom, phylum, class, order, family, genus" > output/blast/taxa/splitOutput/{/}' ::: output/blast/taxa/splitInput/splitTaxa_*
+  
+head -n 1 output/blast/taxa/splitOutput/splitTaxa_0000 > output/blast/blastTaxa.txt
+cat output/blast/taxa/splitOutput/splitTaxa_* | grep -v "superkingdom" | grep -v "NotFound" >> output/blast/blastTaxa.txt</code></pre>
+</div>
+<h3 id="use-taxonomy-and-blast-output-to-keep-all-equal-top-hits">Use taxonomy and blast output to keep all equal top hits</h3>
+output: queryGi, orders, families, genera, species, numOrders, numFamilies, numGenera, numSpecies
+<div class="row">
+
+</div>
+<div class="row">
+<button class="source perl toggle btn btn-xs btn-primary">
+<span class="glyphicon glyphicon-chevron-down"></span> perl source
+</button>
+<pre style=""><code class="source perl">#!/usr/bin/perl
+use warnings;
+use strict;
+use Getopt::Long;
+use Pod::Usage;
+
+
+##############################
+# By Matt Cannon
+# Date: 
+# Last modified: 
+# Title: .pl
+# Purpose: 
+##############################
+
+##############################
+# Options
+##############################
+
+my $verbose;
+my $help;
+my $blastIn;
+my $taxaIn;
+
+# i = integer, s = string
+GetOptions ("verbose"           => \$verbose,
+            "help"              => \$help,
+            "blastIn=s"     => \$blastIn,
+            "taxaIn=s"      => \$taxaIn
+      )
+ or pod2usage(0) && exit;
+
+pod2usage(1) && exit if ($help);
+
+
+##############################
+# Global variables
+##############################
+my %taxaHash;
+my $lastQuery = "";
+my $minEVal = 0;
+
+##############################
+# Code
+##############################
+
+##############################
+### Pull in taxa info and make hash of form:
+### $taxaHash{gi}{taxaLevel or taxId} = taxon
+
+open TAXA, "$taxaIn" or die "Could not open taxonomy input\n";
+my @header = split "\t", <TAXA>;
+chomp @header;
+while(my $input = <TAXA>) {
+    chomp $input;
+    $input =~ s/\n//g;
+    my @columns = split "\t", $input;
+    for(my $i = 1; $i < scalar(@columns); $i++) {
+    if($header[$i] eq "species") {
+        $columns[$i] =~ s/.+\ssp\..*/NA/;
+        $columns[$i] =~ s/.+\scf\.\s.+/NA/;
+        $columns[$i] =~ s/.*isolate\s.*/NA/;
+            $columns[$i] =~ s/.*uncultured.*/NA/;
+            $columns[$i] =~ s/.*unidentified.*/NA/;
+            $columns[$i] =~ s/.*symbiont.*/NA/;
+
+        $columns[$i] =~ s/\s/_/;
+        $columns[$i] =~ s/\s.+//;
+    }
+    $taxaHash{$columns[0]}{$header[$i]} = $columns[$i]; 
+    }
+}
+
+##############################
+### Go through blast output and print out top hits with taxa
+### 
+
+$blastIn =~ s/(.*\.gz)\s*$/gzip -dc < $1|/;
+open BLAST, "$blastIn" or die "Could not open BLAST input\n";
+
+print "query\tsubjectGi\tqueryKingdom\tqueryPhylum\tqueryClass\tqueryOrder\tqueryFamily\tquerySpecies\tsubjectOrder\tsubjectFamily\tsubjectGenus\tsubjectSpecies\tsubjectSuperKingdom\n";
+
+while (my $input = <BLAST>) {
+    chomp $input;
+    if($input !~ /#/) {
+    my ($query, $subject, $evalue, $alignLen, $qLen, $sStart, $sEnd, $sLen) = split "\t", $input;
+    # if new query, print out min eval and gis and reset variables
+    if($lastQuery ne $query) {
+        $minEVal = 1;
+    }
+    # compare minEval to evalue and keep if equal or new 
+    if($evalue <= $minEVal) {
+        my $sGi = $subject;
+        $sGi =~ s/^gi.//;
+        $sGi =~ s/\|.+//;
+        if(exists($taxaHash{$sGi}) && exists($taxaHash{$query})) {
+        my $genus = $taxaHash{$sGi}{species};
+        $genus =~ s/_.+//;
+        #print STDERR $query, "\n";
+        print join("\t", 
+               $query, 
+               $sGi,
+               $taxaHash{$query}{kingdom},
+               $taxaHash{$query}{phylum},
+               $taxaHash{$query}{class},
+               $taxaHash{$query}{order},
+               $taxaHash{$query}{family},
+               $taxaHash{$query}{species},
+               $taxaHash{$sGi}{order}, 
+               $taxaHash{$sGi}{family}, 
+               $genus, 
+               $taxaHash{$sGi}{species},
+               $taxaHash{$sGi}{superkingdom}
+            ), "\n";
+        }
+        $minEVal = $evalue;
+    }
+    $lastQuery = $query;
+    }
+}
+
+
+##############################
+# POD
+##############################
+
+#=pod
+    
+=head SYNOPSIS
+
+Summary:    
+    
+    xxxxxx.pl - generates a consensus for a specified gene in a specified taxa
+    
+Usage:
+
+    perl xxxxxx.pl [options] 
+
+
+=head OPTIONS
+
+Options:
+
+    --verbose
+    --help
+
+=cut</code></pre>
+</div>
+<div class="row">
+<button class="source bash toggle btn btn-xs btn-primary">
+<span class="glyphicon glyphicon-chevron-down"></span> bash source
+</button>
+<pre style=""><code class="source bash">for file in output/blast/*blastResults.txt
+do  
+  base=${file%_blastResults.txt} 
+  base=${base##*/}
+  perl misc/findTopBlastHitsWithTaxa.pl --blastIn ${file} --taxa output/blast/blastTaxa.txt > output/blast/topParsed/${base}_blastParsed.txt
+done</code></pre>
+</div>
+<h3 id="count-number-of-equally-good">Count number of equally good</h3>
+<div class="row">
+<button class="source bash toggle btn btn-xs btn-primary">
+<span class="glyphicon glyphicon-chevron-down"></span> bash source
+</button>
+<pre style=""><code class="source bash"># family
+for file in output/blast/topParsed/*_blastParsed.txt
+do
+  base=${file%_blastParsed.txt}
+  base=${base##*/}
+  grep -v "query" ${file} | cut -f 1,10 | grep -v "NA" | sort | uniq | cut -f 1,1 | sort | uniq -c | perl -pe 's/^ +//' > output/blast/topHitSummary/family/${base}Counts.txt
+done
+# no family info for blasto 
+rm output/blast/topHitSummary/family/Blastocystis18S_F_RCounts.txt
+
+# genus
+for file in output/blast/topParsed/*_blastParsed.txt
+do
+  base=${file%_blastParsed.txt}
+  base=${base##*/}
+  grep -v "query" ${file} | cut -f 1,11 | grep -v "NA" | sort | uniq | cut -f 1,1 | sort | uniq -c | perl -pe 's/^ +//' > output/blast/topHitSummary/genus/${base}Counts.txt
+done
+
+# species
+for file in output/blast/topParsed/*_blastParsed.txt
+do
+  base=${file%_blastParsed.txt}
+  base=${base##*/}
+  grep -v "query" ${file} | cut -f 1,12 | grep -v "NA" | sort | uniq | cut -f 1,1 | sort | uniq -c | perl -pe 's/^ +//' > output/blast/topHitSummary/species/${base}Counts.txt
+done</code></pre>
+</div>
+<h3 id="plot-a-summary-of-the-distribution-blast-hit-results">Plot a summary of the distribution blast hit results</h3>
+<p>Plot the distribution number of species/genera/familes for each primer set, both as absolute numbers and proportions Also summarize the number of on- vs off-target hits and the average number of species/genera/families for each</p>
+<div class="row">
+<button class="source R toggle btn btn-xs btn-primary">
+<span class="glyphicon glyphicon-chevron-down"></span> R source
+</button>
+<pre style=""><code class="source r">summaryDf <- data.frame()
+for(rank in c("family", "genus", "species")) {
+  files <- list.files(path = paste("output/blast/topHitSummary/", rank, sep = ""), pattern = "Counts.txt", full.names = T)
+  for(file in files) {
+    rawDataDf <- read.delim(file, header = F, sep = " ")
+    colnames(rawDataDf) <- c("Count", "junk")
+    rawDataDf$sample <- gsub(".+/", "", file)
+    rawDataDf$sample <- gsub("Counts.txt", "", rawDataDf$sample)
+    rawDataDf$rank <- rank
+    rawDataDf <- rawDataDf[,-2]
+    summaryDf <- rbind(summaryDf, rawDataDf)
+  }
+}
+
+ggplot(summaryDf, aes(x = Count)) + geom_histogram(binwidth = 1) + facet_wrap(~ paste(rank, sample))
+
+furtherSummaryDf <- ddply(summaryDf, .(sample, rank), summarize, 
+                          mean = mean(Count), 
+                          median = median(Count),
+                          proportionOne = sum(Count == 1) / length(Count))
+
+
+outputTableMean <- dcast(furtherSummaryDf, sample ~ rank, value.var = "mean")
+
+pdf("blastSummary.pdf")
+ggplot(summaryDf, aes(x = sample, y = Count)) + 
+  geom_violin(scale = "width") + 
+  facet_wrap(~ rank, ncol = 1, scales = "free_y") + scale_y_log10() + 
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))
+
+ggplot(summaryDf, aes(x = sample, y = Count)) + 
+  geom_jitter(alpha = 0.01) + 
+  facet_wrap(~ rank, ncol = 1, scales = "free_y") + scale_y_log10() + 
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))
+
+dev.off()</code></pre>
+</div>
+<h3 id="list-hit-species">List hit species</h3>
+<div class="row">
+<button class="source bash toggle btn btn-xs btn-primary">
+<span class="glyphicon glyphicon-chevron-down"></span> bash source
+</button>
+<pre style=""><code class="source bash"> 
+#banned words: sp., uncultured, unidentified, cf., isolate, symbiont
+  
+grep Apicomplexa output/taxonomy/Apicomplexa18S_365_F_613_R_taxonomy.txt | cut -f 3,3 | grep -v "sp\." | grep -v "unidentified" | grep -v "cf\." | grep -v "isolate" | grep -v "symbiont" | grep -v "^NA$" | sort | uniq > output/taxonomy/Apicomplexa18S_365_F_613_R_SpeciesList.txt
+  
+grep Blastocystis output/taxonomy/Blastocystis18S_F_R_taxonomy.txt | cut -f 5,5 | grep -v "sp\." | grep -v "unidentified" | grep -v "cf\." | grep -v "isolate" | grep -v "symbiont" | grep -v "^NA$" | sort | uniq > output/taxonomy/Blastocystis18S_F_R_SpeciesList.txt
+  
+grep Kinetoplastida output/taxonomy/Kinetoplastida_18S_4_R_taxonomy.txt | cut -f 3,3 | grep -v "sp\." | grep -v "unidentified" | grep -v "cf\." | grep -v "isolate" | grep -v "symbiont" | grep -v "^NA$" | sort | uniq > output/taxonomy/Kinetoplastida_18S_4_R_SpeciesList.txt
+
+grep Microsporidia output/taxonomy/Microsporidia_18S_F_R_taxonomy.txt | cut -f 3,3 | grep -v "sp\." | grep -v "unidentified" | grep -v "cf\." | grep -v "isolate" | grep -v "symbiont" | grep -v "^NA$" | sort | uniq > output/taxonomy/Microsporidia_18S_F_R_SpeciesList.txt
+
+## parabasalia is distinct due to taxonomy
+########################### check
+grep -f parabasaliaGenera.txt output/taxonomy/Parabasalia18S_288_F_654_R_taxonomy.txt | cut -f 3,3 | grep -v "sp\." | grep -v "cf\." | grep -v "isolate" | grep -v "unidentified" | grep -v "symbiont" |  grep -v "^NA$" | sort | uniq > output/taxonomy/Parabasalia18S_288_F_654_R_SpeciesList.txt
+
+grep Apicomplexa output/taxonomy/Plasmodium18S_883_F_1126_R_taxonomy.txt | cut -f 3,3 | grep -v "sp\." | grep -v "unidentified" | grep -v "cf\." | grep -v "isolate" | grep -v "symbiont" | grep -v "^NA$" | sort | uniq > output/taxonomy/Plasmodium18S_883_F_1126_R_SpeciesList.txt
+
+grep Platyhelminthes output/taxonomy/Platyhelminthes_18S3_F_3R_taxonomy.txt | cut -f 3,3 | grep -v "sp\." | grep -v "unidentified" | grep -v "cf\." | grep -v "isolate" | grep -v "symbiont" | grep -v "^NA$" | sort | uniq > output/taxonomy/Platyhelminthes_18S3_F_3R_SpeciesList.txt
+  
+grep Nematoda output/taxonomy/Spirurida18S_1435_F_1858_R_taxonomy.txt | cut -f 3,3 | grep -v "sp\." | grep -v "unidentified" | grep -v "cf\." | grep -v "isolate" | grep -v "symbiont" | grep -v "^NA$" | sort | uniq > output/taxonomy/Spirurida18S_1435_F_1858_R_SpeciesList.txt
+
+grep Nematoda output/taxonomy/Spirurida18S_F2_R2_taxonomy.txt | cut -f 3,3 | grep -v "sp\." | grep -v "unidentified" | grep -v "cf\." | grep -v "isolate" | grep -v "symbiont" | grep -v "^NA$" | sort | uniq > output/taxonomy/Spirurida18S_F2_R2_SpeciesList.txt
+  
+grep Nematoda output/taxonomy/Trichocephalida18S2_F_R_taxonomy.txt | cut -f 3,3 | grep -v "sp\." | grep -v "unidentified" | grep -v "cf\." | grep -v "isolate" | grep -v "symbiont" | grep -v "^NA$" | sort | uniq > output/taxonomy/Trichocephalida18S2_F_R_SpeciesList.txt
+
+## Giardia Hexamitidae
+grep "Hexamitidae\|Enteromonadidae" output/taxonomy/Diplomonadida_768_F_1059_R_taxonomy.txt | cut -f 3,3 | grep -v "sp\." | grep -v "unidentified" | grep -v "cf\." | grep -v "isolate" | grep -v "symbiont" | grep -v "^NA$" | sort | uniq > output/taxonomy/Diplomonadida_768_F_1059_R_SpeciesList.txt
+
+## Crypto Cryptosporidiidae
+grep Apicomplexa output/taxonomy/Eimeriorina18S_302_F_730_R_taxonomy.txt | cut -f 3,3 | grep -v "sp\." | grep -v "unidentified" | grep -v "cf\." | grep -v "isolate" | grep -v "symbiont" | grep -v "^NA$" | sort | uniq > output/taxonomy/Eimeriorina18S_302_F_730_R_SpeciesList.txt
+
+## Amoebozoa 
+grep -f amoebozoaGenera.txt output/taxonomy/Amoebozoa_18S_2_R_taxonomy.txt | cut -f 3,3 | grep -v "sp\." | grep -v "unidentified" | grep -v "cf\." | grep -v "isolate" | grep -v "symbiont" | grep -v "^NA$" | sort | uniq > output/taxonomy/Amoebozoa_18S_2_R_SpeciesList.txt
+
+
+#### Groups
+cat output/taxonomy/Spirurida18S_1435_F_1858_R_SpeciesList.txt output/taxonomy/Spirurida18S_F2_R2_SpeciesList.txt output/taxonomy/Trichocephalida18S2_F_R_SpeciesList.txt | sort | uniq > output/taxonomy/Nematoda_SpeciesList.txt
+
+cat output/taxonomy/Apicomplexa18S_365_F_613_R_SpeciesList.txt output/taxonomy/Plasmodium18S_883_F_1126_R_SpeciesList.txt output/taxonomy/Eimeriorina18S_302_F_730_R_SpeciesList.txt | sort | uniq > output/taxonomy/Apicomplexa_SpeciesList.txt
+
+
+## Published primers
+for inFile in output/taxonomy/Ciliophora*taxonomy.txt output/taxonomy/Dinophyceae*taxonomy.txt  output/taxonomy/Entamoeba*taxonomy.txt output/taxonomy/Eukaryota*taxonomy.txt output/taxonomy/Fungi*taxonomy.txt output/taxonomy/Microsporidia_V1*taxonomy.txt output/taxonomy/Trichomonadida*taxonomy.txt
+do
+  target=${inFile%%_*}
+  target=${target##*/}
+  target=${target/inetoplastidia/inetoplastida}
+  base=${inFile%taxonomy.txt}
+ 
+  grep ${target} ${inFile} | cut -f 3,3 | grep -v "sp\." | grep -v "unidentified" | grep -v "cf\." | grep -v "isolate" | grep -v "symbiont" | grep -v "^NA$" | sort | uniq > ${base}SpeciesList.txt
+done
+
+### These  have special requirements
+
+grep Kinetoplastida output/taxonomy/Kinetoplastidia*taxonomy.txt | cut -f 9,9 | grep -v "sp\." | grep -v "unidentified" | grep -v "cf\." | grep -v "isolate" | grep -v "symbiont" | grep -v "^NA$" | sort | uniq > output/taxonomy/Kinetoplastidia_Kineto_kin1_Kineto_kin2_SpeciesList.txt
+
+grep -f amoebozoaGenera.txt output/taxonomy/Amoebozoa_Ami6F1*taxonomy.txt | cut -f 3,3 | grep -v "sp\." | grep -v "unidentified" | grep -v "cf\." | grep -v "isolate" | grep -v "symbiont" | grep -v "^NA$" | sort | uniq > output/taxonomy/Amoebozoa_Ami6F1_Ami9R_SpeciesList.txt
+
+grep "Hexamitidae\|Enteromonadidae" output/taxonomy/Diplomonadida_DimA*taxonomy.txt | cut -f 3,3 | grep -v "sp\." | grep -v "unidentified" | grep -v "cf\." | grep -v "isolate" | grep -v "symbiont" | grep -v "^NA$" | sort | uniq > output/taxonomy/Diplomonadida_DimA_DimB_SpeciesList.txt
+
+grep "Armophorea\|Colpodea\|Litostomatea\|Nassophorea\|Odontostomatea\|Oligohymenophorea\|Phyllopharyngea\|Plagiopylea\|Prostomatea\|Spirotrichea\|Heterotrichea\|Karyorelictea" output/taxonomy/Ciliophora*taxonomy.txt | cut -f 3,3 | grep -v "sp\." | grep -v "unidentified" | grep -v "cf\." | grep -v "isolate" | grep -v "symbiont" | grep -v "^NA$" | sort | uniq > output/taxonomy/Ciliophora_121F_1147R_SpeciesList.txt
+
+
+wc -l output/taxonomy/*SpeciesList.txt | perl -pe 's/^\s+//' > output/summaryTable/hitsSpeciesCount_SpeciesList.txt</code></pre>
+</div>
+<h3 id="find-missed-hits">Find missed hits</h3>
+banned words: sp., uncultured, unidentified, cf., isolate, symbiont
+<div class="row">
+<button class="source bash toggle btn btn-xs btn-primary">
+<span class="glyphicon glyphicon-chevron-down"></span> bash source
+</button>
+<pre style=""><code class="source bash">for file in output/blast/*blastResults.txt
+do 
+  base=${file##*/} 
+  base=${base%blastResults.txt}potential_hits.txt
+  
+  perl misc/getPotentialHits.pl --alignVar 10 \
+      --taxa output/blast/blastTaxa.txt \
+      --blast ${file} \
+      --primers primerInputParasites.txt \
+      > output/blast/potentialHits/${base}
+done</code></pre>
+</div>
+<h3 id="count-the-number-of-potential-hits-for-each-primer-from-blast-results">Count the number of potential hits for each primer from BLAST results</h3>
+<div class="row">
+<button class="source bash toggle btn btn-xs btn-primary">
+<span class="glyphicon glyphicon-chevron-down"></span> bash source
+</button>
+<pre style=""><code class="source bash">grep Apicomplexa output/blast/potentialHits/Apicomplexa18S_365_F_613_R_potential_hits.txt | cut -f 8,8 | grep -v species | sort | uniq | grep -v "^NA$" | perl -pe 's/_/ /' > output/blast/potentialHits/Apicomplexa18S_365_F_613_R_species_list.txt
+ 
+grep Blastocystis output/blast/potentialHits/Blastocystis18S_F_R_potential_hits.txt | cut -f 8,8 | grep -v species | sort | uniq | grep -v "^NA$" | perl -pe 's/_/ /' > output/blast/potentialHits/Blastocystis18S_F_R_species_list.txt
+
+grep Kinetoplastida output/blast/potentialHits/Kinetoplastida_18S_4_R_potential_hits.txt | cut -f 8,8 | grep -v species | sort | uniq | grep -v "^NA$" | perl -pe 's/_/ /' > output/blast/potentialHits/Kinetoplastida_18S_4_R_species_list.txt
+ 
+grep Microsporidia output/blast/potentialHits/Microsporidia_18S_F_R_potential_hits.txt | cut -f 8,8 | grep -v species | sort | uniq | grep -v "^NA$" | perl -pe 's/_/ /' > output/blast/potentialHits/Microsporidia_18S_F_R_species_list.txt
+
+#### Parabasalia is distinct due to taxonomy  
+#less testParabasaliaTaxa.txt | grep %@ | perl -pe 's/.+\t//' | grep -v "uncultured\|soil\|environmental\|unidentified" | cut -f 1,1 -d " " | sort | uniq > parabasaliaGenera.txt
+grep -f parabasaliaGenera.txt output/blast/potentialHits/Parabasalia18S_288_F_654_R_potential_hits.txt | cut -f 8,8 | grep -v species | sort | uniq | grep -v "^NA$" | perl -pe 's/_/ /' > output/blast/potentialHits/Parabasalia18S_288_F_654_R_species_list.txt
+
+grep Apicomplexa output/blast/potentialHits/Plasmodium18S_883_F_1126_R_potential_hits.txt | cut -f 8,8 | grep -v species | sort | uniq | grep -v "^NA$" | perl -pe 's/_/ /' > output/blast/potentialHits/Plasmodium18S_883_F_1126_R_species_list.txt
+
+grep Platyhelminthes output/blast/potentialHits/Platyhelminthes_18S3_F_3R_potential_hits.txt | cut -f 8,8 | grep -v species | sort | uniq | grep -v "^NA$" | perl -pe 's/_/ /' > output/blast/potentialHits/Platyhelminthes_18S3_F_3R_species_list.txt
+
+grep Nematoda output/blast/potentialHits/Spirurida18S_1435_F_1858_R_potential_hits.txt | cut -f 8,8 | grep -v species | sort | uniq | grep -v "^NA$" | perl -pe 's/_/ /' > output/blast/potentialHits/Spirurida18S_1435_F_1858_R_species_list.txt
+
+grep Nematoda output/blast/potentialHits/Spirurida18S_F2_R2_potential_hits.txt | cut -f 8,8 | grep -v species | sort | uniq | grep -v "^NA$" | perl -pe 's/_/ /' > output/blast/potentialHits/Spirurida18S_F2_R2_species_list.txt
+
+grep Nematoda output/blast/potentialHits/Trichocephalida18S2_F_R_potential_hits.txt | cut -f 8,8 | grep -v species | sort | uniq | grep -v "^NA$" | perl -pe 's/_/ /' > output/blast/potentialHits/Trichocephalida18S2_F_R_species_list.txt
+
+## Giardia Hexamitidae ########### 
+grep "Hexamitidae\|Enteromonadidae" output/blast/potentialHits/Diplomonadida_768_F_1059_R_potential_hits.txt | cut -f 8,8 | grep -v species | sort | uniq | grep -v "^NA$" | perl -pe 's/_/ /' > output/blast/potentialHits/Diplomonadida_768_F_1059_R_species_list.txt
+
+## Crypto Cryptosporidiidae
+grep Apicomplexa output/blast/potentialHits/Eimeriorina18S_302_F_730_R_potential_hits.txt | cut -f 8,8 | grep -v species | sort | uniq | grep -v "^NA$" | perl -pe 's/_/ /' > output/blast/potentialHits/Eimeriorina18S_302_F_730_R_species_list.txt
+
+## Amoebozoa  
+### Went to NCBI taxonomy, searched Amoebozoa, set levels to 9 and copied/pasted the page into word, then copy/paste into testAmoebaTaxa.txt
+#less testAmoebaTaxa.txt |grep %@ | perl -pe 's/.+\t//' | grep -v "uncultured\|soil\|environmental" | cut -f 1,1 -d " " | sort | uniq > amoebozoaGenera.txt
+grep -f amoebozoaGenera.txt output/blast/potentialHits/Amoebozoa_18S_2_R_potential_hits.txt  | cut -f 8,8 | grep -v species | sort | uniq | grep -v "^NA$" | perl -pe 's/_/ /' > output/blast/potentialHits/Amoebozoa_18S_2_R_species_list.txt
+# less output/taxonomy/Amoebozoa_18S_2_R_taxonomy.txt | grep -v "sp.\|cf.\|isolate\|aff.\|genotype" | cut -f 3,3 | sort | uniq | wc -l
+
+## Groups
+grep Apicomplexa output/blast/potentialHits/Apicomplexa18S_365_F_613_R_potential_hits.txt output/blast/potentialHits/Plasmodium18S_883_F_1126_R_potential_hits.txt output/blast/potentialHits/Eimeriorina18S_302_F_730_R_potential_hits.txt | cut -f 8,8 | grep -v species | sort | uniq | grep -v "^NA$" | perl -pe 's/_/ /' > output/blast/potentialHits/Apicomplexa_species_list.txt
+
+grep Nematoda output/blast/potentialHits/Trichocephalida18S2_F_R_potential_hits.txt output/blast/potentialHits/Spirurida18S_*potential_hits.txt | cut -f 8,8 | grep -v species | sort | uniq | grep -v "^NA$" | perl -pe 's/_/ /' > output/blast/potentialHits/Nematoda_species_list.txt
+
+
+### Published primers
+for inFile in output/blast/potentialHits/Ciliophora*potential_hits.txt output/blast/potentialHits/Dinophyceae*potential_hits.txt  output/blast/potentialHits/Entamoeba*potential_hits.txt output/blast/potentialHits/Eukaryota*potential_hits.txt output/blast/potentialHits/Fungi*potential_hits.txt output/blast/potentialHits/Kinetoplastidia*potential_hits.txt output/blast/potentialHits/Microsporidia_V1*potential_hits.txt output/blast/potentialHits/Trichomonadida*potential_hits.txt
+do
+  target=${inFile%%_*}
+  target=${target##*/}
+  target=${target/inetoplastidia/inetoplastida}
+  base=${inFile%potential_hits.txt}
+ 
+  grep ${target} ${inFile} | cut -f 8,8 | grep -v species | sort | uniq | grep -v "^NA$" | perl -pe 's/_/ /' > output/blast/potentialHits/${base##*/}species_list.txt
+done
+
+### These two have special requirements
+grep -f amoebozoaGenera.txt output/blast/potentialHits/Amoebozoa_Ami6F1*potential_hits.txt | cut -f 8,8 | grep -v species | sort | uniq | grep -v "^NA$" | perl -pe 's/_/ /' > output/blast/potentialHits/Amoebozoa_Ami6F1_Ami9R_species_list.txt
+
+grep "Hexamitidae\|Enteromonadidae" output/blast/potentialHits/Diplomonadida_DimA*potential_hits.txt | cut -f 8,8 | grep -v species | sort | uniq | grep -v "^NA$" | perl -pe 's/_/ /' > output/blast/potentialHits/Diplomonadida_DimA_DimB_species_list.txt
+
+grep "Armophorea\|Colpodea\|Litostomatea\|Nassophorea\|Odontostomatea\|Oligohymenophorea\|Phyllopharyngea\|Plagiopylea\|Prostomatea\|Spirotrichea\|Heterotrichea\|Karyorelictea" output/blast/potentialHits/Ciliophora*potential_hits.txt | cut -f 8,8 | grep -v species | sort | uniq | grep -v "^NA$" | perl -pe 's/_/ /' > output/blast/potentialHits/Ciliophora_121F_1147R_species_list.txt
+
+
+
+wc -l output/blast/potentialHits/*_species_list.txt | perl -pe 's/^\s+//' > output/summaryTable/potentialHitsSpeciesCount_species_list.txt</code></pre>
+</div>
+<h2 id="find-proportion-of-primertree-hits-that-are-on-target">Find proportion of PrimerTree hits that are on-target</h2>
+<p>This is to find out how specific each primer is to the target taxa. Basically, I’m running an unrestricted PrimerTree analysis, exporting the taxonomy of the hits and counting the proportion that are on-target.</p>
+<h3 id="run-primertree-to-find-the-propotion-of-on-target-hits">Run PrimerTree to find the propotion of on-target hits</h3>
+<div class="row">
+<button class="source R toggle btn btn-xs btn-primary">
+<span class="glyphicon glyphicon-chevron-down"></span> R source
+</button>
+<pre style=""><code class="source r">primers <- read.delim("primerInputParasites.txt", header = F, comment.char = "#")
+
+doneFiles <- list.files(path = "output/unrestrictedPrimerTree/primerTreeObj/", pattern = "_primerTree.RData")
+doneFiles <- as.character(lapply(doneFiles, function(x) gsub("_primerTree.RData", "", x)))
+
+for(i in 1:nrow(primers)) {
+  fwd <- as.character(primers[i, 2])
+  rev <- as.character(primers[i, 4])
+  min_len <- primers[i, 7]
+  max_len <- primers[i, 8]
+
+  lab <- as.character(paste(primers[i, 1], primers[i,3], sep = "_"))
+
+  if(!lab %in% doneFiles) {
+    primTree <- search_primer_pair(forward = fwd,
+                                   reverse = rev,
+                                   name = lab,
+                                   num_aligns = 10000,
+                                   num_permutations = 150,
+                                   min_length = min_len,
+                                   max_length = max_len)
+    
+    assign(lab, primTree)
+    
+    if(length(names(get(lab))) == 9) {
+      save(list = (as.character(lab)), 
+           file = paste("output/unrestrictedPrimerTree/primerTreeObj/", lab, "_primerTree.RData", sep = ""))
+    
+      if(length(names(get(lab)$sequence)) > 5) {
+        png(filename = paste("output/unrestrictedPrimerTree/figures/", lab, "_primerTree.png", sep = ""), 
+            width = 4000, 
+            height = 4000, 
+            res = 300)
+        
+        print(plot(get(lab), size = 1, main = gsub("_.+", "", lab)))
+        
+        dev.off()
+      }
+    
+      taxonomy <- get(lab)$taxonomy
+      write.table(taxonomy, file = paste("output/unrestrictedPrimerTree/taxonomy/", lab, "_taxonomy.txt", sep = ""), 
+                  quote = F, 
+                  sep = "\t", 
+                  col.names = T, 
+                  row.names = F)
+      
+      sequences <- get(lab)$sequence
+      write.dna(sequences, file = paste("output/unrestrictedPrimerTree/sequences/", lab, "_sequences.fasta", sep = ""), 
+                format = "fasta")
+  
+    }
+  }
+  rm(list = ls(pattern = lab))
+}</code></pre>
+</div>
+<h3 id="list-on-and-off-target-species-hit-by-primers">List on and off-target species hit by primers</h3>
+<p>Double check species columns</p>
+<div class="row">
+<button class="source bash toggle btn btn-xs btn-primary">
+<span class="glyphicon glyphicon-chevron-down"></span> bash source
+</button>
+<pre style=""><code class="source bash">#banned words: sp., uncultured, unidentified, cf., isolate, symbiont
+  
+grep Apicomplexa output/unrestrictedPrimerTree/taxonomy/Apicomplexa18S_365_F_613_R_taxonomy.txt | cut -f 3,3 | grep -v "sp\." | grep -v "unidentified" | grep -v "cf\." | grep -v "isolate" | grep -v "symbiont" | grep -v "^NA$" | sort | uniq >  output/unrestrictedPrimerTree/taxonomy/species/On_Apicomplexa18S_365_F_613_R_SpeciesList.txt
+  
+grep Blastocystis output/unrestrictedPrimerTree/taxonomy/Blastocystis18S_F_R_taxonomy.txt | cut -f 3,3 | grep -v "sp\." | grep -v "unidentified" | grep -v "cf\." | grep -v "isolate" | grep -v "symbiont" | grep -v "^NA$" | sort | uniq > output/unrestrictedPrimerTree/taxonomy/species/On_Blastocystis18S_F_R_SpeciesList.txt
+  
+grep Kinetoplastida output/unrestrictedPrimerTree/taxonomy/Kinetoplastida_18S_4_R_taxonomy.txt | cut -f 3,3 | grep -v "sp\." | grep -v "unidentified" | grep -v "cf\." | grep -v "isolate" | grep -v "symbiont" | grep -v "^NA$" | sort | uniq > output/unrestrictedPrimerTree/taxonomy/species/On_Kinetoplastida_18S_4_R_SpeciesList.txt
+
+grep Microsporidia output/unrestrictedPrimerTree/taxonomy/Microsporidia_18S_F_R_taxonomy.txt | cut -f 7,7 | grep -v "sp\." | grep -v "unidentified" | grep -v "cf\." | grep -v "isolate" | grep -v "symbiont" | grep -v "^NA$" | sort | uniq > output/unrestrictedPrimerTree/taxonomy/species/On_Microsporidia_18S_F_R_SpeciesList.txt
+
+## parabasalia is distinct due to taxonomy
+grep -f parabasaliaGenera.txt output/unrestrictedPrimerTree/taxonomy/Parabasalia18S_288_F_654_R_taxonomy.txt | cut -f 3,3 | grep -v "sp\." | grep -v "cf\." | grep -v "isolate" | grep -v "unidentified" | grep -v "symbiont" |  grep -v "^NA$" | sort | uniq > output/unrestrictedPrimerTree/taxonomy/species/On_Parabasalia18S_288_F_654_R_SpeciesList.txt
+
+grep Apicomplexa output/unrestrictedPrimerTree/taxonomy/Plasmodium18S_883_F_1126_R_taxonomy.txt | cut -f 3,3 | grep -v "sp\." | grep -v "unidentified" | grep -v "cf\." | grep -v "isolate" | grep -v "symbiont" | grep -v "^NA$" | sort | uniq > output/unrestrictedPrimerTree/taxonomy/species/On_Plasmodium18S_883_F_1126_R_SpeciesList.txt
+
+grep Platyhelminthes output/unrestrictedPrimerTree/taxonomy/Platyhelminthes_18S3_F_3R_taxonomy.txt | cut -f 3,3 | grep -v "sp\." | grep -v "unidentified" | grep -v "cf\." | grep -v "isolate" | grep -v "symbiont" | grep -v "^NA$" | sort | uniq > output/unrestrictedPrimerTree/taxonomy/species/On_Platyhelminthes_18S3_F_3R_SpeciesList.txt
+  
+grep Nematoda output/unrestrictedPrimerTree/taxonomy/Spirurida18S_1435_F_1858_R_taxonomy.txt | cut -f 3,3 | grep -v "sp\." | grep -v "unidentified" | grep -v "cf\." | grep -v "isolate" | grep -v "symbiont" | grep -v "^NA$" | sort | uniq > output/unrestrictedPrimerTree/taxonomy/species/On_Spirurida18S_1435_F_1858_R_SpeciesList.txt
+
+grep Nematoda output/unrestrictedPrimerTree/taxonomy/Spirurida18S_F2_R2_taxonomy.txt | cut -f 3,3 | grep -v "sp\." | grep -v "unidentified" | grep -v "cf\." | grep -v "isolate" | grep -v "symbiont" | grep -v "^NA$" | sort | uniq > output/unrestrictedPrimerTree/taxonomy/species/On_Spirurida18S_F2_R2_SpeciesList.txt
+  
+grep Nematoda output/unrestrictedPrimerTree/taxonomy/Trichocephalida18S2_F_R_taxonomy.txt | cut -f 3,3 | grep -v "sp\." | grep -v "unidentified" | grep -v "cf\." | grep -v "isolate" | grep -v "symbiont" | grep -v "^NA$" | sort | uniq > output/unrestrictedPrimerTree/taxonomy/species/On_Trichocephalida18S2_F_R_SpeciesList.txt
+
+## Giardia Hexamitidae
+grep "Hexamitidae\|Enteromonadidae" output/unrestrictedPrimerTree/taxonomy/Diplomonadida_768_F_1059_R_taxonomy.txt | cut -f 3,3 | grep -v "sp\." | grep -v "unidentified" | grep -v "cf\." | grep -v "isolate" | grep -v "symbiont" | grep -v "^NA$" | sort | uniq > output/unrestrictedPrimerTree/taxonomy/species/On_Diplomonadida_768_F_1059_R_SpeciesList.txt
+
+## Crypto Cryptosporidiidae
+grep Apicomplexa output/unrestrictedPrimerTree/taxonomy/Eimeriorina18S_302_F_730_R_taxonomy.txt | cut -f 3,3 | grep -v "sp\." | grep -v "unidentified" | grep -v "cf\." | grep -v "isolate" | grep -v "symbiont" | grep -v "^NA$" | sort | uniq > output/unrestrictedPrimerTree/taxonomy/species/On_Eimeriorina18S_302_F_730_R_SpeciesList.txt
+
+## Amoebozoa 
+grep -f amoebozoaGenera.txt output/unrestrictedPrimerTree/taxonomy/Amoebozoa_18S_2_R_taxonomy.txt | cut -f 3,3 | grep -v "sp\." | grep -v "unidentified" | grep -v "cf\." | grep -v "isolate" | grep -v "symbiont" | grep -v "^NA$" | sort | uniq > output/unrestrictedPrimerTree/taxonomy/species/On_Amoebozoa_18S_2_R_SpeciesList.txt
+
+
+# Published primers
+for inFile in output/unrestrictedPrimerTree/taxonomy/Ciliophora*taxonomy.txt output/unrestrictedPrimerTree/taxonomy/Dinophyceae*taxonomy.txt  output/unrestrictedPrimerTree/taxonomy/Entamoeba*taxonomy.txt output/unrestrictedPrimerTree/taxonomy/Eukaryota*taxonomy.txt output/unrestrictedPrimerTree/taxonomy/Fungi*taxonomy.txt output/unrestrictedPrimerTree/taxonomy/Kinetoplastidia*taxonomy.txt output/unrestrictedPrimerTree/taxonomy/Microsporidia_V1*taxonomy.txt output/unrestrictedPrimerTree/taxonomy/Trichomonadida*taxonomy.txt
+do
+  target=${inFile%%_*}
+  target=${target##*/}
+  target=${target/inetoplastidia/inetoplastida}
+  base=${inFile%taxonomy.txt}
+ 
+  grep ${target} ${inFile} | cut -f 3,3 | grep -v "sp\." | grep -v "unidentified" | grep -v "cf\." | grep -v "isolate" | grep -v "symbiont" | grep -v "^NA$" | sort | uniq > output/unrestrictedPrimerTree/taxonomy/species/On_${base##*/}SpeciesList.txt
+done
+
+### These three have special requirements
+grep -f amoebozoaGenera.txt output/unrestrictedPrimerTree/taxonomy/Amoebozoa_Ami6F1*taxonomy.txt | cut -f 3,3 | grep -v "sp\." | grep -v "unidentified" | grep -v "cf\." | grep -v "isolate" | grep -v "symbiont" | grep -v "^NA$" | sort | uniq > output/unrestrictedPrimerTree/taxonomy/species/On_Amoebozoa_Ami6F1_Ami9R_SpeciesList.txt
+
+grep "Hexamitidae\|Enteromonadidae" output/unrestrictedPrimerTree/taxonomy/Diplomonadida_DimA*taxonomy.txt | cut -f 3,3 | grep -v "sp\." | grep -v "unidentified" | grep -v "cf\." | grep -v "isolate" | grep -v "symbiont" | grep -v "^NA$" | sort | uniq > output/unrestrictedPrimerTree/taxonomy/species/On_Diplomonadida_DimA_DimB_SpeciesList.txt
+
+grep "Armophorea\|Colpodea\|Litostomatea\|Nassophorea\|Odontostomatea\|Oligohymenophorea\|Phyllopharyngea\|Plagiopylea\|Prostomatea\|Spirotrichea\|Heterotrichea\|Karyorelictea" output/unrestrictedPrimerTree/taxonomy/Ciliophora*taxonomy.txt | cut -f 3,3 | grep -v "sp\." | grep -v "unidentified" | grep -v "cf\." | grep -v "isolate" | grep -v "symbiont" | grep -v "^NA$" | sort | uniq > output/unrestrictedPrimerTree/taxonomy/species/On_Ciliophora_121F_1147R_SpeciesList.txt
+
+
+
+
+
+
+##########################################  
+##### off-target
+##########################################
+
+grep -v Apicomplexa output/unrestrictedPrimerTree/taxonomy/Apicomplexa18S_365_F_613_R_taxonomy.txt | cut -f 3,3 | grep -v "species" | grep -v -v "sp\." | grep -v "unidentified" | grep -v "cf\." | grep -v "isolate" | grep -v "symbiont" | grep -v "^NA$" | sort | uniq >  output/unrestrictedPrimerTree/taxonomy/species/Off_Apicomplexa18S_365_F_613_R_SpeciesList.txt
+  
+grep -v Blastocystis output/unrestrictedPrimerTree/taxonomy/Blastocystis18S_F_R_taxonomy.txt | cut -f 3,3 | grep -v "species" | grep -v "sp\." | grep -v "unidentified" | grep -v "cf\." | grep -v "isolate" | grep -v "symbiont" | grep -v "^NA$" | sort | uniq > output/unrestrictedPrimerTree/taxonomy/species/Off_Blastocystis18S_F_R_SpeciesList.txt
+  
+grep -v Kinetoplastida output/unrestrictedPrimerTree/taxonomy/Kinetoplastida_18S_4_R_taxonomy.txt | cut -f 3,3 | grep -v "species" | grep -v "sp\." | grep -v "unidentified" | grep -v "cf\." | grep -v "isolate" | grep -v "symbiont" | grep -v "^NA$" | sort | uniq > output/unrestrictedPrimerTree/taxonomy/species/Off_Kinetoplastida_18S_4_R_SpeciesList.txt
+
+grep -v Microsporidia output/unrestrictedPrimerTree/taxonomy/Microsporidia_18S_F_R_taxonomy.txt | cut -f 7,7 | grep -v "species" | grep -v "sp\." | grep -v "unidentified" | grep -v "cf\." | grep -v "isolate" | grep -v "symbiont" | grep -v "^NA$" | sort | uniq > output/unrestrictedPrimerTree/taxonomy/species/Off_Microsporidia_18S_F_R_SpeciesList.txt
+
+## parabasalia is distinct due to taxonomy
+########################### check
+grep -v -f parabasaliaGenera.txt output/unrestrictedPrimerTree/taxonomy/Parabasalia18S_288_F_654_R_taxonomy.txt | cut -f 3,3 | grep -v "species" | grep -v "sp\." | grep -v "cf\." | grep -v "isolate" | grep -v "unidentified" | grep -v "symbiont" |  grep -v "^NA$" | sort | uniq > output/unrestrictedPrimerTree/taxonomy/species/Off_Parabasalia18S_288_F_654_R_SpeciesList.txt
+
+grep -v Apicomplexa output/unrestrictedPrimerTree/taxonomy/Plasmodium18S_883_F_1126_R_taxonomy.txt | cut -f 3,3 | grep -v "species" | grep -v "sp\." | grep -v "unidentified" | grep -v "cf\." | grep -v "isolate" | grep -v "symbiont" | grep -v "^NA$" | sort | uniq > output/unrestrictedPrimerTree/taxonomy/species/Off_Plasmodium18S_883_F_1126_R_SpeciesList.txt
+
+grep -v Platyhelminthes output/unrestrictedPrimerTree/taxonomy/Platyhelminthes_18S3_F_3R_taxonomy.txt | cut -f 3,3 | grep -v "species" | grep -v "sp\." | grep -v "unidentified" | grep -v "cf\." | grep -v "isolate" | grep -v "symbiont" | grep -v "^NA$" | sort | uniq > output/unrestrictedPrimerTree/taxonomy/species/Off_Platyhelminthes_18S3_F_3R_SpeciesList.txt
+  
+grep -v Nematoda output/unrestrictedPrimerTree/taxonomy/Spirurida18S_1435_F_1858_R_taxonomy.txt | cut -f 3,3 | grep -v "species" | grep -v "sp\." | grep -v "unidentified" | grep -v "cf\." | grep -v "isolate" | grep -v "symbiont" | grep -v "^NA$" | sort | uniq > output/unrestrictedPrimerTree/taxonomy/species/Off_Spirurida18S_1435_F_1858_R_SpeciesList.txt
+
+grep -v Nematoda output/unrestrictedPrimerTree/taxonomy/Spirurida18S_F2_R2_taxonomy.txt | cut -f 3,3 | grep -v "species" | grep -v "sp\." | grep -v "unidentified" | grep -v "cf\." | grep -v "isolate" | grep -v "symbiont" | grep -v "^NA$" | sort | uniq > output/unrestrictedPrimerTree/taxonomy/species/Off_Spirurida18S_F2_R2_SpeciesList.txt
+  
+grep -v Nematoda output/unrestrictedPrimerTree/taxonomy/Trichocephalida18S2_F_R_taxonomy.txt | cut -f 3,3 | grep -v "species" | grep -v "sp\." | grep -v "unidentified" | grep -v "cf\." | grep -v "isolate" | grep -v "symbiont" | grep -v "^NA$" | sort | uniq > output/unrestrictedPrimerTree/taxonomy/species/Off_Trichocephalida18S2_F_R_SpeciesList.txt
+
+## Giardia Hexamitidae
+grep -v "Hexamitidae\|Enteromonadidae" output/unrestrictedPrimerTree/taxonomy/Diplomonadida_768_F_1059_R_taxonomy.txt | cut -f 3,3 | grep -v "species" | grep -v "sp\." | grep -v "unidentified" | grep -v "cf\." | grep -v "isolate" | grep -v "symbiont" | grep -v "^NA$" | sort | uniq > output/unrestrictedPrimerTree/taxonomy/species/Off_Diplomonadida_768_F_1059_R_SpeciesList.txt
+
+## Crypto Cryptosporidiidae
+grep -v Apicomplexa output/unrestrictedPrimerTree/taxonomy/Eimeriorina18S_302_F_730_R_taxonomy.txt | cut -f 3,3 | grep -v "species" | grep -v "sp\." | grep -v "unidentified" | grep -v "cf\." | grep -v "isolate" | grep -v "symbiont" | grep -v "^NA$" | sort | uniq > output/unrestrictedPrimerTree/taxonomy/species/Off_Eimeriorina18S_302_F_730_R_SpeciesList.txt
+
+## Amoebozoa 
+grep -v -f amoebozoaGenera.txt output/unrestrictedPrimerTree/taxonomy/Amoebozoa_18S_2_R_taxonomy.txt | cut -f 3,3 | grep -v "sp\." | grep -v "unidentified" | grep -v "cf\." | grep -v "isolate" | grep -v "symbiont" | grep -v "^NA$" | sort | uniq > output/unrestrictedPrimerTree/taxonomy/species/Off_Amoebozoa_18S_2_R_SpeciesList.txt
+
+
+# Published primers
+for inFile in output/unrestrictedPrimerTree/taxonomy/Ciliophora*taxonomy.txt output/unrestrictedPrimerTree/taxonomy/Dinophyceae*taxonomy.txt  output/unrestrictedPrimerTree/taxonomy/Entamoeba*taxonomy.txt output/unrestrictedPrimerTree/taxonomy/Eukaryota*taxonomy.txt output/unrestrictedPrimerTree/taxonomy/Fungi*taxonomy.txt output/unrestrictedPrimerTree/taxonomy/Kinetoplastidia*taxonomy.txt output/unrestrictedPrimerTree/taxonomy/Microsporidia_V1*taxonomy.txt output/unrestrictedPrimerTree/taxonomy/Trichomonadida*taxonomy.txt
+do
+  target=${inFile%%_*}
+  target=${target##*/} 
+  target=${target/inetoplastidia/inetoplastida}
+  base=${inFile%taxonomy.txt}
+ 
+  grep -v ${target} ${inFile} | cut -f 3,3 | grep -v "sp\." | grep -v "unidentified" | grep -v "cf\." | grep -v "isolate" | grep -v "symbiont" | grep -v "^NA$" | sort | uniq > output/unrestrictedPrimerTree/taxonomy/species/Off_${base##*/}SpeciesList.txt
+done
+
+### These three have special requirements
+grep -v -f amoebozoaGenera.txt output/unrestrictedPrimerTree/taxonomy/Amoebozoa_Ami6F1*taxonomy.txt | cut -f 3,3 | grep -v "sp\." | grep -v "unidentified" | grep -v "cf\." | grep -v "isolate" | grep -v "symbiont" | grep -v "^NA$" | sort | uniq > output/unrestrictedPrimerTree/taxonomy/species/Off_Amoebozoa_Ami6F1_Ami9R_SpeciesList.txt
+
+grep -v "Hexamitidae\|Enteromonadidae" output/unrestrictedPrimerTree/taxonomy/Diplomonadida_DimA*taxonomy.txt | cut -f 3,3 | grep -v "sp\." | grep -v "unidentified" | grep -v "cf\." | grep -v "isolate" | grep -v "symbiont" | grep -v "^NA$" | sort | uniq > output/unrestrictedPrimerTree/taxonomy/species/Off_Diplomonadida_DimA_DimB_SpeciesList.txt
+
+grep -v "Armophorea\|Colpodea\|Litostomatea\|Nassophorea\|Odontostomatea\|Oligohymenophorea\|Phyllopharyngea\|Plagiopylea\|Prostomatea\|Spirotrichea\|Heterotrichea\|Karyorelictea" output/unrestrictedPrimerTree/taxonomy/Ciliophora*taxonomy.txt | cut -f 3,3 | grep -v "sp\." | grep -v "unidentified" | grep -v "cf\." | grep -v "isolate" | grep -v "symbiont" | grep -v "^NA$" | sort | uniq > output/unrestrictedPrimerTree/taxonomy/species/Off_Ciliophora_121F_1147R_SpeciesList.txt
+
+
+
+
+wc -l output/unrestrictedPrimerTree/taxonomy/species/On_*SpeciesList.txt | perl -pe 's/^\s+//' > output/summaryTable/OnTargetSpeciesCount_SpeciesList.txt
+wc -l output/unrestrictedPrimerTree/taxonomy/species/Off_*SpeciesList.txt | perl -pe 's/^\s+//' > output/summaryTable/OffTargetSpeciesCount_SpeciesList.txt</code></pre>
+</div>
+<h2 id="make-up-summary-table-for-paper">Make up summary table for paper</h2>
+<p>use: Percent of species on target output/summaryTable/OnTargetSpeciesCount_SpeciesList.txt output/summaryTable/OffTargetSpeciesCount_SpeciesList.txt</p>
+<p>Number of species found and in NCBI output/summaryTable/hitsSpeciesCount_SpeciesList.txt output/summaryTable/potentialHitsSpeciesCount_species_list.txt</p>
+<p>Primer taxonomic specificity output/blast/topHitSummary/family/<span class="math inline"><em>b</em><em>a</em><em>s</em><em>e</em><em>C</em><em>o</em><em>u</em><em>n</em><em>t</em><em>s</em>.<em>t</em><em>x</em><em>t</em><em>o</em><em>u</em><em>t</em><em>p</em><em>u</em><em>t</em>/<em>b</em><em>l</em><em>a</em><em>s</em><em>t</em>/<em>t</em><em>o</em><em>p</em><em>H</em><em>i</em><em>t</em><em>S</em><em>u</em><em>m</em><em>m</em><em>a</em><em>r</em><em>y</em>/<em>g</em><em>e</em><em>n</em><em>u</em><em>s</em>/</span>{base}Counts.txt output/blast/topHitSummary/species/${base}Counts.txt</p>
+<div class="row">
+<button class="source R toggle btn btn-xs btn-primary">
+<span class="glyphicon glyphicon-chevron-down"></span> R source
+</button>
+<pre style=""><code class="source r">#############################################
+### Number of species found and in NCBI total
+foundCounts <- read.delim("output/summaryTable/hitsSpeciesCount_SpeciesList.txt", header = F, sep = " ")
+colnames(foundCounts) <- c("Species found", "Primer")
+foundCounts <- subset(foundCounts, Primer != "total")
+foundCounts$Primer <- gsub(".+/", "", foundCounts$Primer)
+foundCounts$Primer <- gsub("_SpeciesList.txt", "", foundCounts$Primer)
+
+potentialCounts <- read.delim("output/summaryTable/potentialHitsSpeciesCount_species_list.txt", header = F, sep = " ")
+colnames(potentialCounts) <- c("Species In NCBI", "Primer")
+potentialCounts <- subset(potentialCounts, Primer != "total")
+potentialCounts$Primer <- gsub(".+/", "", potentialCounts$Primer)
+potentialCounts$Primer <- gsub("_species_list.txt", "", potentialCounts$Primer)
+
+summaryTable <- merge(foundCounts, potentialCounts, all = T)
+
+summaryTable$`Species In NCBI` <- paste(
+  prettyNum(summaryTable$`Species In NCBI`, big.mark = ","), 
+  " (", 
+  round(100 * (summaryTable$`Species found` / summaryTable$`Species In NCBI`), digits = 1), 
+  "%)", 
+  sep = "")
+
+summaryTable$`Species found` <- prettyNum(summaryTable$`Species found`, big.mark = ",")
+
+rownames(summaryTable) <- summaryTable$Primer
+
+##############################################
+### Mean number of species matching each blast query and % single match
+for(tLevel in c("family", "genus", "species")) {
+  specificityFiles <- list.files(paste("output/blast/topHitSummary/", tLevel, "/", sep = ""), pattern = "Counts.txt", full.names = T)
+  for(inFile in specificityFiles) {
+    Primer <- gsub(".+/", "", inFile)
+    Primer <- gsub("Counts.txt", "", Primer)
+    
+    dataDf <- read.delim(inFile, header = F, sep = " ")
+    
+    summaryTable[Primer, paste(tLevel, " mean", sep = "")] <- round(mean(dataDf$V1), digits = 1)
+    
+    summaryTable[Primer, paste(tLevel, " % single", sep = "")] <- paste(round(100 * (sum(dataDf$V1 == 1) / length(dataDf$V1)), digits = 1), "%", sep = "")
+  }
+}
+
+###############################################
+### % species on target
+onTargetCounts <- read.delim("output/summaryTable/OnTargetSpeciesCount_SpeciesList.txt", header = F, sep = " ")
+colnames(onTargetCounts) <- c("On target", "Primer")
+onTargetCounts <- subset(onTargetCounts, Primer != "total")
+onTargetCounts$Primer <- gsub(".+/", "", onTargetCounts$Primer)
+onTargetCounts$Primer <- gsub("_SpeciesList.txt", "", onTargetCounts$Primer)
+onTargetCounts$Primer <- gsub("On_", "", onTargetCounts$Primer)
+
+summaryTable <- merge(summaryTable, onTargetCounts, all = T)
+
+offTargetCounts <- read.delim("output/summaryTable/OffTargetSpeciesCount_SpeciesList.txt", header = F, sep = " ")
+colnames(offTargetCounts) <- c("Off target", "Primer")
+offTargetCounts <- subset(offTargetCounts, Primer != "total")
+offTargetCounts$Primer <- gsub(".+/", "", offTargetCounts$Primer)
+offTargetCounts$Primer <- gsub("_SpeciesList.txt", "", offTargetCounts$Primer)
+offTargetCounts$Primer <- gsub("Off_", "", offTargetCounts$Primer)
+
+summaryTable <- merge(summaryTable, offTargetCounts, all = T)
+
+summaryTable$`% Species on-target` <- paste(round(100 * (summaryTable$`On target` / (summaryTable$`On target` + summaryTable$`Off target`)), digits = 1), "%", sep = "")
+
+write.table(summaryTable, file = 'output/summaryTable/finalTable.txt', quote = F, sep = "\t", row.names = F, col.names = T, na = "")</code></pre>
+</div>
+</div>
+</div>
+<div class="navbar navbar-fixed-bottom navbar-inverse">
+<div class="container">
+<div class="navbar-header">
+<button type="button" class="navbar-toggle" data-toggle="collapse" data-target=".navbar-responsive-collapse">
+<span class="icon-bar"></span> <span class="icon-bar"></span> <span class="icon-bar"></span>
+</button>
+</div>
+<div id="bottom-navbar" class="navbar-collapse collapse navbar-responsive-collapse">
+<ul class="nav navbar-nav navbar-right">
+<li class="nav">
+<p class="navbar-text">
+Toggle
+</p>
+</li>
+<li class="dropup">
+<a href="#" class="dropdown-toggle" data-toggle="dropdown">Code <b class="caret"></b></a>
+<ul class="dropdown-menu">
+<li class="dropdown-header">
+Languages
+</li>
+<li class="active">
+<a href="#" class="toggle-global source R" type="source.R">R</a>
+</li>
+<li class="active">
+<a href="#" class="toggle-global source bash" type="source.bash">bash</a>
+</li>
+<li class="active">
+<a href="#" class="toggle-global source perl" type="source.perl">perl</a>
+</li>
+<li>
+<a href="#" type="all-source" class="toggle-global">All</a>
+</li>
+</ul>
+</li>
+<li class="dropup">
+<a href="#" class="dropdown-toggle" data-toggle="dropdown">Output <b class="caret"></b></a>
+<ul class="dropdown-menu">
+<li class="dropdown-header">
+Type
+</li>
+<li class="active">
+<a href="#" class="toggle-global output" type="output">output</a>
+</li>
+<li>
+<a href="#" type="all-output" class="toggle-global">All</a>
+</li>
+</ul>
+</li>
+<li class="active">
+<a href="#" type="figure" class="toggle-global">Figures</a>
+</li>
+</ul>
+</div>
+</div>
+</div>
+</div>
+<div id="push">
+
+</div>
+<div id="footer">
+<div class="container">
+<p class="text-muted" id="credit">
+Styled with <a href="https://github.com/jimhester/knitrBootstrap">knitrBootstrap</a>
+</p>
+</div>
+</div>
+<link rel="stylesheet" id="theme" href="https://netdna.bootstrapcdn.com/bootstrap/3.0.0/css/bootstrap.min.css" media="screen"></link><link rel="stylesheet" id="highlight" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/7.3/styles/default.min.css" media="screen"></link>
+</div>
+</body>
+</html>

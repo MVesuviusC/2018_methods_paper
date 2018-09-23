@@ -1,0 +1,747 @@
+---
+title: "evalPrimerSpecificityParasites"
+output: html_document
+---
+
+```{r setup, cache = FALSE, include = FALSE}
+opts_chunk$set(cache = TRUE, fig.height = 10, fig.width = 20)
+```
+
+```{r loadLibraries, cache = FALSE}
+library(ggplot2)
+library(reshape2)
+library(plyr)
+library(primerTree)
+library(ape)
+theme_set(theme_bw())
+theme_update(plot.title = element_text(hjust = 0.5))
+```
+
+```{bash mkdirs, eval = FALSE}
+mkdir output
+mkdir output/primerTreeObj
+mkdir output/figures
+mkdir output/sequences
+mkdir output/sequences/trimmed
+mkdir output/sequences/unique
+mkdir output/taxonomy
+mkdir output/blast
+mkdir output/blast/taxa
+mkdir output/blast/taxa/splitInput
+mkdir output/blast/taxa/splitOutput
+mkdir output/blast/topParsed
+mkdir output/blast/potentialHits
+mkdir misc
+mkdir output/unrestrictedPrimerTree/
+mkdir output/unrestrictedPrimerTree/primerTreeObj
+mkdir output/unrestrictedPrimerTree/figures
+mkdir output/unrestrictedPrimerTree/taxonomy
+mkdir output/unrestrictedPrimerTree/sequences
+mkdir output/unrestrictedPrimerTree/taxonomy/species
+mkdir output/summaryTable
+```
+
+
+# Evaluation of metabarcoding primers
+Characterization of the specificity and taxonomic accuracy of metabarcoding primers. 
+
+
+Need to be sure the primerTree results are run alongside a current version of the local blast database. Otherwise, you can either get primerTree results that aren't in the local blast database and you get more found than potential hits. Or you can get primerTree results that are for gis that have been subsequently updated, and so the taxonomy is no longer available, again, resulting in more found than potential hits. 
+
+## Show primer input file
+```{bash showPrimerInputFile, comment = '', cache = FALSE}
+cat primerInputParasites.txt
+```
+
+## Run primerTree on all the primers limited to target taxa
+This data is used for several calculations:
+  - Primer taxonomic specificity
+  - Calculation of the proportion of on-target hits
+  - Calculation of the proportion of possible targets that are actually amplifiable
+  - Visual display of primer coverage
+  - Amplicon length distribution
+  
+Min and max amplicon length is used to avoid very short and very long sequences messing up the alignment. The values are chosen based on information from the original publication and preliminary primerTree runs without length limits to define the normal range of amplicon lengths
+
+Used primerTree version from my github that included min_length and max_length options
+
+```{r primerTree, eval = FALSE}
+primers <- read.delim("primerInputParasites.txt", header = F, comment.char = "#")
+
+doneFiles <- list.files(path = "output/primerTreeObj/", pattern = "_primerTree.RData")
+doneFiles <- as.character(lapply(doneFiles, function(x) gsub("_primerTree.RData", "", x)))
+
+for(i in 1:nrow(primers)) {
+  fwd <- as.character(primers[i, 2])
+  rev <- as.character(primers[i, 4])
+  target <- as.character(primers[i, 5])
+  min_len <- primers[i, 7]
+  max_len <- primers[i, 8]
+  
+  lab <- as.character(paste(primers[i, 1], primers[i,3], sep = "_"))
+
+  print(lab)
+ 
+  if(lab %in% doneFiles) {
+    load(paste("output/primerTreeObj/", lab, "_primerTree.RData", sep = ""))
+  } else {
+    primTree <- search_primer_pair(forward = fwd,
+                                 reverse = rev,
+                                 name = lab,
+                                 num_aligns = 10000,
+                                 num_permutations = 150,
+                                 min_length = min_len,
+                                 max_length = max_len,
+                                 organism = target)
+
+    assign(lab, primTree)
+    save(list = (as.character(lab)), file = paste("output/primerTreeObj/", lab, "_primerTree.RData", sep = ""))
+  
+    if(length(names(get(lab))) == 9) {
+	    taxonomy <- get(lab)$taxonomy
+      write.table(taxonomy, file = paste("output/taxonomy/", lab, "_taxonomy.txt", sep = ""), 
+                quote = F, 
+                sep = "\t", 
+                col.names = T, 
+                row.names = F)
+  
+	    sequences <- get(lab)$sequence
+    	write.dna(sequences, file = paste("output/sequences/", lab, "_sequences.fasta", sep = ""), 
+                format = "fasta")
+    
+      if(length(names(get(lab)$sequence)) > 5) {
+        png(filename = paste("output/figures/", lab, "_primerTree.png", sep = ""), 
+              width = 4000, 
+              height = 4000, 
+              res = 300)
+
+        print(plot(get(lab), size = 1, main = paste(lab, " primers", sep = "")))
+       
+        dev.off()
+        
+        seqLength <- as.data.frame(seq_lengths(get(lab)))
+        colnames(seqLength) <- c("Length", "Count")
+        seqLength$Length <- as.numeric(as.character(seqLength$Length))
+
+        png(filename = paste("output/figures/", lab, "_SeqLens.png", sep = ""), 
+              width = 4000, 
+              height = 4000, 
+              res = 300)
+
+        print(
+          ggplot(seqLength, aes(x = Length, y = Count)) + 
+            geom_bar(stat = "identity") +
+            theme(text = element_text(size = 20)) +
+            ggtitle(paste(lab, " primers amplicon length\n", sep = ""))
+        )
+        dev.off()
+      }
+    }
+  }
+  
+  rm(list = ls(pattern = lab))
+}
+
+```
+
+## Assessing how many species a given sequence can be assigned to equally
+The idea here is to take the sequences retrieved by primerTree and blast them, then take all equal blast hits and count how many species/genera/families are represented for each query sequence. This will allow the calculation of averages and the distribution of these counts. 
+
+
+### Trim the primer sequences off of the sequences pulled out of primerTree
+```{r, echo = F, cache = FALSE}
+read_chunk('../../misc/trimFastaByPrimerLength.pl', labels = 'trimPrimers')
+```
+```{perl trimPrimers, eval = FALSE, cache = FALSE}
+```
+
+```{bash trimPrimerSeqs, eval = FALSE}
+for file in output/sequences/*.fasta
+do
+  base=${file##*/}
+  perl ../misc/trimFastaByPrimerLength.pl --fasta ${file} --primers primerInputParasites.txt > output/sequences/trimmed/${base}
+done
+```
+
+###  Keep a single copy of each sequence per species to avoid massive skew of the data.
+For example, 200 identical human sequences
+```{r, echo = F, cache = FALSE}
+read_chunk('../../misc/uniqueFastaBySpeciesSeq.pl', labels = 'uniqueFasta')
+```
+```{perl uniqueFasta, eval = FALSE, cache = FALSE}
+```
+
+```{bash uniqueSeqs, eval = FALSE}
+for file in output/sequences/trimmed/*.fasta
+do
+  base=${file##*/}
+  base=${base%sequences.fasta}
+  perl ../misc/uniqueFastaBySpeciesSeq.pl \
+      --tax output/taxonomy/${base}taxonomy.txt \
+      --fasta ${file} \
+    > output/sequences/unique/${base}sequences.fasta
+done
+```
+
+
+### Blast each sequence against nr database
+Uncultured organism gis obtained from NCBI using the search:
+`("environmental samples"[organism] OR metagenomes[orgn] OR txid32644[orgn])` 
+
+BLAST nt and taxdb databases downloaded 9-5-18
+/usr/local/packages/perl-5.22.2/bin/perl /usr/local/packages/ncbi-blast-2.2.31+/bin/update_blastdb.pl --decompress --force --verbose nt
+
+```{bash showBlast, comment = '', cache = FALSE}
+cat blast.sh 
+```
+
+```{bash blast, eval = FALSE}
+qsub blast.sh 
+```
+
+
+### Pull hit GI number out of the BLAST results
+```{bash getGi, eval = FALSE}
+for file in output/blast/*blastResults.txt
+do
+   base=${file##*/}   
+   base=${base%blastResults.txt}
+   cat ${file} | grep -v "#" | cut -f 2,2 | perl -pe 's/gi.//' | perl -pe 's/\|.+//' | sort | uniq > output/blast/giIntermediate${base}.txt
+done
+
+cat output/blast/giIntermediate*.txt | sort | uniq > output/blast/gis.txt
+```
+
+### Get taxonomy information from NCBI
+```{r, echo = F, cache = FALSE}
+read_chunk('~/SerreDLab-2/cannonm3/scripts/getTaxa/getTaxa.pl', labels = 'getTaxaScript')
+```
+```{perl getTaxaScript, eval = FALSE, cache = FALSE}
+```
+
+
+```{bash getTaxonomy, eval = FALSE}
+rm output/blast/taxa/splitInput/splitTaxa_* 
+split -a 4 -d output/blast/gis.txt output/blast/taxa/splitInput/splitTaxa_
+  
+parallel -j 20 '/usr/local/packages/perl-5.22.2/bin/perl ~/SerreDLab-2/cannonm3/scripts/getTaxa/getTaxa.pl --input {} --ranks "superkingdom, kingdom, phylum, class, order, family, genus" > output/blast/taxa/splitOutput/{/}' ::: output/blast/taxa/splitInput/splitTaxa_*
+  
+head -n 1 output/blast/taxa/splitOutput/splitTaxa_0000 > output/blast/blastTaxa.txt
+cat output/blast/taxa/splitOutput/splitTaxa_* | grep -v "superkingdom" | grep -v "NotFound" >> output/blast/blastTaxa.txt
+```
+
+### Use taxonomy and blast output to keep all equal top hits
+output: queryGi, orders, families, genera, species, numOrders, numFamilies, numGenera, numSpecies
+```{r, echo = F, cache = FALSE}
+read_chunk('../misc/findTopBlastHitsWithFullTaxa.pl', labels = 'parseBlastScript')
+```
+```{perl parseBlastScript, eval = FALSE, cache = FALSE}
+```
+
+```{bash parseTopBlastHits, eval = FALSE}
+for file in output/blast/*blastResults.txt
+do  
+  base=${file%_blastResults.txt} 
+  base=${base##*/}
+  perl misc/findTopBlastHitsWithTaxa.pl --blastIn ${file} --taxa output/blast/blastTaxa.txt > output/blast/topParsed/${base}_blastParsed.txt
+done
+```
+
+### Count number of equally good 
+```{bash countNumInRank, eval = FALSE}
+# family
+for file in output/blast/topParsed/*_blastParsed.txt
+do
+  base=${file%_blastParsed.txt}
+  base=${base##*/}
+  grep -v "query" ${file} | cut -f 1,10 | grep -v "NA" | sort | uniq | cut -f 1,1 | sort | uniq -c | perl -pe 's/^ +//' > output/blast/topHitSummary/family/${base}Counts.txt
+done
+# no family info for blasto 
+rm output/blast/topHitSummary/family/Blastocystis18S_F_RCounts.txt
+
+# genus
+for file in output/blast/topParsed/*_blastParsed.txt
+do
+  base=${file%_blastParsed.txt}
+  base=${base##*/}
+  grep -v "query" ${file} | cut -f 1,11 | grep -v "NA" | sort | uniq | cut -f 1,1 | sort | uniq -c | perl -pe 's/^ +//' > output/blast/topHitSummary/genus/${base}Counts.txt
+done
+
+# species
+for file in output/blast/topParsed/*_blastParsed.txt
+do
+  base=${file%_blastParsed.txt}
+  base=${base##*/}
+  grep -v "query" ${file} | cut -f 1,12 | grep -v "NA" | sort | uniq | cut -f 1,1 | sort | uniq -c | perl -pe 's/^ +//' > output/blast/topHitSummary/species/${base}Counts.txt
+done
+```
+
+
+### Plot a summary of the distribution blast hit results
+Plot the distribution number of species/genera/familes for each primer set, both as absolute numbers and proportions
+Also summarize the number of on- vs off-target hits and the average number of species/genera/families for each
+
+```{r plotBlastSummary, eval = FALSE}
+summaryDf <- data.frame()
+for(rank in c("family", "genus", "species")) {
+  files <- list.files(path = paste("output/blast/topHitSummary/", rank, sep = ""), pattern = "Counts.txt", full.names = T)
+  for(file in files) {
+    rawDataDf <- read.delim(file, header = F, sep = " ")
+    colnames(rawDataDf) <- c("Count", "junk")
+    rawDataDf$sample <- gsub(".+/", "", file)
+    rawDataDf$sample <- gsub("Counts.txt", "", rawDataDf$sample)
+    rawDataDf$rank <- rank
+    rawDataDf <- rawDataDf[,-2]
+    summaryDf <- rbind(summaryDf, rawDataDf)
+  }
+}
+
+ggplot(summaryDf, aes(x = Count)) + geom_histogram(binwidth = 1) + facet_wrap(~ paste(rank, sample))
+
+furtherSummaryDf <- ddply(summaryDf, .(sample, rank), summarize, 
+                          mean = mean(Count), 
+                          median = median(Count),
+                          proportionOne = sum(Count == 1) / length(Count))
+
+
+outputTableMean <- dcast(furtherSummaryDf, sample ~ rank, value.var = "mean")
+
+pdf("blastSummary.pdf")
+ggplot(summaryDf, aes(x = sample, y = Count)) + 
+  geom_violin(scale = "width") + 
+  facet_wrap(~ rank, ncol = 1, scales = "free_y") + scale_y_log10() + 
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))
+
+ggplot(summaryDf, aes(x = sample, y = Count)) + 
+  geom_jitter(alpha = 0.01) + 
+  facet_wrap(~ rank, ncol = 1, scales = "free_y") + scale_y_log10() + 
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))
+
+dev.off()
+```
+
+
+### List hit species
+
+```{bash listHitSpecies, eval = FALSE}
+ 
+#banned words: sp., uncultured, unidentified, cf., isolate, symbiont
+  
+grep Apicomplexa output/taxonomy/Apicomplexa18S_365_F_613_R_taxonomy.txt | cut -f 3,3 | grep -v "sp\." | grep -v "unidentified" | grep -v "cf\." | grep -v "isolate" | grep -v "symbiont" | grep -v "^NA$" | sort | uniq > output/taxonomy/Apicomplexa18S_365_F_613_R_SpeciesList.txt
+  
+grep Blastocystis output/taxonomy/Blastocystis18S_F_R_taxonomy.txt | cut -f 5,5 | grep -v "sp\." | grep -v "unidentified" | grep -v "cf\." | grep -v "isolate" | grep -v "symbiont" | grep -v "^NA$" | sort | uniq > output/taxonomy/Blastocystis18S_F_R_SpeciesList.txt
+  
+grep Kinetoplastida output/taxonomy/Kinetoplastida_18S_4_R_taxonomy.txt | cut -f 3,3 | grep -v "sp\." | grep -v "unidentified" | grep -v "cf\." | grep -v "isolate" | grep -v "symbiont" | grep -v "^NA$" | sort | uniq > output/taxonomy/Kinetoplastida_18S_4_R_SpeciesList.txt
+
+grep Microsporidia output/taxonomy/Microsporidia_18S_F_R_taxonomy.txt | cut -f 3,3 | grep -v "sp\." | grep -v "unidentified" | grep -v "cf\." | grep -v "isolate" | grep -v "symbiont" | grep -v "^NA$" | sort | uniq > output/taxonomy/Microsporidia_18S_F_R_SpeciesList.txt
+
+## parabasalia is distinct due to taxonomy
+########################### check
+grep -f parabasaliaGenera.txt output/taxonomy/Parabasalia18S_288_F_654_R_taxonomy.txt | cut -f 3,3 | grep -v "sp\." | grep -v "cf\." | grep -v "isolate" | grep -v "unidentified" | grep -v "symbiont" |  grep -v "^NA$" | sort | uniq > output/taxonomy/Parabasalia18S_288_F_654_R_SpeciesList.txt
+
+grep Apicomplexa output/taxonomy/Plasmodium18S_883_F_1126_R_taxonomy.txt | cut -f 3,3 | grep -v "sp\." | grep -v "unidentified" | grep -v "cf\." | grep -v "isolate" | grep -v "symbiont" | grep -v "^NA$" | sort | uniq > output/taxonomy/Plasmodium18S_883_F_1126_R_SpeciesList.txt
+
+grep Platyhelminthes output/taxonomy/Platyhelminthes_18S3_F_3R_taxonomy.txt | cut -f 3,3 | grep -v "sp\." | grep -v "unidentified" | grep -v "cf\." | grep -v "isolate" | grep -v "symbiont" | grep -v "^NA$" | sort | uniq > output/taxonomy/Platyhelminthes_18S3_F_3R_SpeciesList.txt
+  
+grep Nematoda output/taxonomy/Spirurida18S_1435_F_1858_R_taxonomy.txt | cut -f 3,3 | grep -v "sp\." | grep -v "unidentified" | grep -v "cf\." | grep -v "isolate" | grep -v "symbiont" | grep -v "^NA$" | sort | uniq > output/taxonomy/Spirurida18S_1435_F_1858_R_SpeciesList.txt
+
+grep Nematoda output/taxonomy/Spirurida18S_F2_R2_taxonomy.txt | cut -f 3,3 | grep -v "sp\." | grep -v "unidentified" | grep -v "cf\." | grep -v "isolate" | grep -v "symbiont" | grep -v "^NA$" | sort | uniq > output/taxonomy/Spirurida18S_F2_R2_SpeciesList.txt
+  
+grep Nematoda output/taxonomy/Trichocephalida18S2_F_R_taxonomy.txt | cut -f 3,3 | grep -v "sp\." | grep -v "unidentified" | grep -v "cf\." | grep -v "isolate" | grep -v "symbiont" | grep -v "^NA$" | sort | uniq > output/taxonomy/Trichocephalida18S2_F_R_SpeciesList.txt
+
+## Giardia Hexamitidae
+grep "Hexamitidae\|Enteromonadidae" output/taxonomy/Diplomonadida_768_F_1059_R_taxonomy.txt | cut -f 3,3 | grep -v "sp\." | grep -v "unidentified" | grep -v "cf\." | grep -v "isolate" | grep -v "symbiont" | grep -v "^NA$" | sort | uniq > output/taxonomy/Diplomonadida_768_F_1059_R_SpeciesList.txt
+
+## Crypto Cryptosporidiidae
+grep Apicomplexa output/taxonomy/Eimeriorina18S_302_F_730_R_taxonomy.txt | cut -f 3,3 | grep -v "sp\." | grep -v "unidentified" | grep -v "cf\." | grep -v "isolate" | grep -v "symbiont" | grep -v "^NA$" | sort | uniq > output/taxonomy/Eimeriorina18S_302_F_730_R_SpeciesList.txt
+
+## Amoebozoa 
+grep -f amoebozoaGenera.txt output/taxonomy/Amoebozoa_18S_2_R_taxonomy.txt | cut -f 3,3 | grep -v "sp\." | grep -v "unidentified" | grep -v "cf\." | grep -v "isolate" | grep -v "symbiont" | grep -v "^NA$" | sort | uniq > output/taxonomy/Amoebozoa_18S_2_R_SpeciesList.txt
+
+
+#### Groups
+cat output/taxonomy/Spirurida18S_1435_F_1858_R_SpeciesList.txt output/taxonomy/Spirurida18S_F2_R2_SpeciesList.txt output/taxonomy/Trichocephalida18S2_F_R_SpeciesList.txt | sort | uniq > output/taxonomy/Nematoda_SpeciesList.txt
+
+cat output/taxonomy/Apicomplexa18S_365_F_613_R_SpeciesList.txt output/taxonomy/Plasmodium18S_883_F_1126_R_SpeciesList.txt output/taxonomy/Eimeriorina18S_302_F_730_R_SpeciesList.txt | sort | uniq > output/taxonomy/Apicomplexa_SpeciesList.txt
+
+
+## Published primers
+for inFile in output/taxonomy/Ciliophora*taxonomy.txt output/taxonomy/Dinophyceae*taxonomy.txt  output/taxonomy/Entamoeba*taxonomy.txt output/taxonomy/Eukaryota*taxonomy.txt output/taxonomy/Fungi*taxonomy.txt output/taxonomy/Microsporidia_V1*taxonomy.txt output/taxonomy/Trichomonadida*taxonomy.txt
+do
+  target=${inFile%%_*}
+  target=${target##*/}
+  target=${target/inetoplastidia/inetoplastida}
+  base=${inFile%taxonomy.txt}
+ 
+  grep ${target} ${inFile} | cut -f 3,3 | grep -v "sp\." | grep -v "unidentified" | grep -v "cf\." | grep -v "isolate" | grep -v "symbiont" | grep -v "^NA$" | sort | uniq > ${base}SpeciesList.txt
+done
+
+### These  have special requirements
+
+grep Kinetoplastida output/taxonomy/Kinetoplastidia*taxonomy.txt | cut -f 9,9 | grep -v "sp\." | grep -v "unidentified" | grep -v "cf\." | grep -v "isolate" | grep -v "symbiont" | grep -v "^NA$" | sort | uniq > output/taxonomy/Kinetoplastidia_Kineto_kin1_Kineto_kin2_SpeciesList.txt
+
+grep -f amoebozoaGenera.txt output/taxonomy/Amoebozoa_Ami6F1*taxonomy.txt | cut -f 3,3 | grep -v "sp\." | grep -v "unidentified" | grep -v "cf\." | grep -v "isolate" | grep -v "symbiont" | grep -v "^NA$" | sort | uniq > output/taxonomy/Amoebozoa_Ami6F1_Ami9R_SpeciesList.txt
+
+grep "Hexamitidae\|Enteromonadidae" output/taxonomy/Diplomonadida_DimA*taxonomy.txt | cut -f 3,3 | grep -v "sp\." | grep -v "unidentified" | grep -v "cf\." | grep -v "isolate" | grep -v "symbiont" | grep -v "^NA$" | sort | uniq > output/taxonomy/Diplomonadida_DimA_DimB_SpeciesList.txt
+
+grep "Armophorea\|Colpodea\|Litostomatea\|Nassophorea\|Odontostomatea\|Oligohymenophorea\|Phyllopharyngea\|Plagiopylea\|Prostomatea\|Spirotrichea\|Heterotrichea\|Karyorelictea" output/taxonomy/Ciliophora*taxonomy.txt | cut -f 3,3 | grep -v "sp\." | grep -v "unidentified" | grep -v "cf\." | grep -v "isolate" | grep -v "symbiont" | grep -v "^NA$" | sort | uniq > output/taxonomy/Ciliophora_121F_1147R_SpeciesList.txt
+
+
+wc -l output/taxonomy/*SpeciesList.txt | perl -pe 's/^\s+//' > output/summaryTable/hitsSpeciesCount_SpeciesList.txt
+```
+
+
+### Find missed hits
+banned words: sp., uncultured, unidentified, cf., isolate, symbiont
+```{bash parsePotentialHits, eval = FALSE}
+for file in output/blast/*blastResults.txt
+do 
+  base=${file##*/} 
+  base=${base%blastResults.txt}potential_hits.txt
+  
+  perl misc/getPotentialHits.pl --alignVar 10 \
+      --taxa output/blast/blastTaxa.txt \
+      --blast ${file} \
+      --primers primerInputParasites.txt \
+      > output/blast/potentialHits/${base}
+done
+```
+
+
+### Count the number of potential hits for each primer from BLAST results
+```{bash countUniqueSpecies, eval = FALSE}
+grep Apicomplexa output/blast/potentialHits/Apicomplexa18S_365_F_613_R_potential_hits.txt | cut -f 8,8 | grep -v species | sort | uniq | grep -v "^NA$" | perl -pe 's/_/ /' > output/blast/potentialHits/Apicomplexa18S_365_F_613_R_species_list.txt
+ 
+grep Blastocystis output/blast/potentialHits/Blastocystis18S_F_R_potential_hits.txt | cut -f 8,8 | grep -v species | sort | uniq | grep -v "^NA$" | perl -pe 's/_/ /' > output/blast/potentialHits/Blastocystis18S_F_R_species_list.txt
+
+grep Kinetoplastida output/blast/potentialHits/Kinetoplastida_18S_4_R_potential_hits.txt | cut -f 8,8 | grep -v species | sort | uniq | grep -v "^NA$" | perl -pe 's/_/ /' > output/blast/potentialHits/Kinetoplastida_18S_4_R_species_list.txt
+ 
+grep Microsporidia output/blast/potentialHits/Microsporidia_18S_F_R_potential_hits.txt | cut -f 8,8 | grep -v species | sort | uniq | grep -v "^NA$" | perl -pe 's/_/ /' > output/blast/potentialHits/Microsporidia_18S_F_R_species_list.txt
+
+#### Parabasalia is distinct due to taxonomy  
+#less testParabasaliaTaxa.txt | grep %@ | perl -pe 's/.+\t//' | grep -v "uncultured\|soil\|environmental\|unidentified" | cut -f 1,1 -d " " | sort | uniq > parabasaliaGenera.txt
+grep -f parabasaliaGenera.txt output/blast/potentialHits/Parabasalia18S_288_F_654_R_potential_hits.txt | cut -f 8,8 | grep -v species | sort | uniq | grep -v "^NA$" | perl -pe 's/_/ /' > output/blast/potentialHits/Parabasalia18S_288_F_654_R_species_list.txt
+
+grep Apicomplexa output/blast/potentialHits/Plasmodium18S_883_F_1126_R_potential_hits.txt | cut -f 8,8 | grep -v species | sort | uniq | grep -v "^NA$" | perl -pe 's/_/ /' > output/blast/potentialHits/Plasmodium18S_883_F_1126_R_species_list.txt
+
+grep Platyhelminthes output/blast/potentialHits/Platyhelminthes_18S3_F_3R_potential_hits.txt | cut -f 8,8 | grep -v species | sort | uniq | grep -v "^NA$" | perl -pe 's/_/ /' > output/blast/potentialHits/Platyhelminthes_18S3_F_3R_species_list.txt
+
+grep Nematoda output/blast/potentialHits/Spirurida18S_1435_F_1858_R_potential_hits.txt | cut -f 8,8 | grep -v species | sort | uniq | grep -v "^NA$" | perl -pe 's/_/ /' > output/blast/potentialHits/Spirurida18S_1435_F_1858_R_species_list.txt
+
+grep Nematoda output/blast/potentialHits/Spirurida18S_F2_R2_potential_hits.txt | cut -f 8,8 | grep -v species | sort | uniq | grep -v "^NA$" | perl -pe 's/_/ /' > output/blast/potentialHits/Spirurida18S_F2_R2_species_list.txt
+
+grep Nematoda output/blast/potentialHits/Trichocephalida18S2_F_R_potential_hits.txt | cut -f 8,8 | grep -v species | sort | uniq | grep -v "^NA$" | perl -pe 's/_/ /' > output/blast/potentialHits/Trichocephalida18S2_F_R_species_list.txt
+
+## Giardia Hexamitidae ########### 
+grep "Hexamitidae\|Enteromonadidae" output/blast/potentialHits/Diplomonadida_768_F_1059_R_potential_hits.txt | cut -f 8,8 | grep -v species | sort | uniq | grep -v "^NA$" | perl -pe 's/_/ /' > output/blast/potentialHits/Diplomonadida_768_F_1059_R_species_list.txt
+
+## Crypto Cryptosporidiidae
+grep Apicomplexa output/blast/potentialHits/Eimeriorina18S_302_F_730_R_potential_hits.txt | cut -f 8,8 | grep -v species | sort | uniq | grep -v "^NA$" | perl -pe 's/_/ /' > output/blast/potentialHits/Eimeriorina18S_302_F_730_R_species_list.txt
+
+## Amoebozoa  
+### Went to NCBI taxonomy, searched Amoebozoa, set levels to 9 and copied/pasted the page into word, then copy/paste into testAmoebaTaxa.txt
+#less testAmoebaTaxa.txt |grep %@ | perl -pe 's/.+\t//' | grep -v "uncultured\|soil\|environmental" | cut -f 1,1 -d " " | sort | uniq > amoebozoaGenera.txt
+grep -f amoebozoaGenera.txt output/blast/potentialHits/Amoebozoa_18S_2_R_potential_hits.txt  | cut -f 8,8 | grep -v species | sort | uniq | grep -v "^NA$" | perl -pe 's/_/ /' > output/blast/potentialHits/Amoebozoa_18S_2_R_species_list.txt
+# less output/taxonomy/Amoebozoa_18S_2_R_taxonomy.txt | grep -v "sp.\|cf.\|isolate\|aff.\|genotype" | cut -f 3,3 | sort | uniq | wc -l
+
+## Groups
+grep Apicomplexa output/blast/potentialHits/Apicomplexa18S_365_F_613_R_potential_hits.txt output/blast/potentialHits/Plasmodium18S_883_F_1126_R_potential_hits.txt output/blast/potentialHits/Eimeriorina18S_302_F_730_R_potential_hits.txt | cut -f 8,8 | grep -v species | sort | uniq | grep -v "^NA$" | perl -pe 's/_/ /' > output/blast/potentialHits/Apicomplexa_species_list.txt
+
+grep Nematoda output/blast/potentialHits/Trichocephalida18S2_F_R_potential_hits.txt output/blast/potentialHits/Spirurida18S_*potential_hits.txt | cut -f 8,8 | grep -v species | sort | uniq | grep -v "^NA$" | perl -pe 's/_/ /' > output/blast/potentialHits/Nematoda_species_list.txt
+
+
+### Published primers
+for inFile in output/blast/potentialHits/Ciliophora*potential_hits.txt output/blast/potentialHits/Dinophyceae*potential_hits.txt  output/blast/potentialHits/Entamoeba*potential_hits.txt output/blast/potentialHits/Eukaryota*potential_hits.txt output/blast/potentialHits/Fungi*potential_hits.txt output/blast/potentialHits/Kinetoplastidia*potential_hits.txt output/blast/potentialHits/Microsporidia_V1*potential_hits.txt output/blast/potentialHits/Trichomonadida*potential_hits.txt
+do
+  target=${inFile%%_*}
+  target=${target##*/}
+  target=${target/inetoplastidia/inetoplastida}
+  base=${inFile%potential_hits.txt}
+ 
+  grep ${target} ${inFile} | cut -f 8,8 | grep -v species | sort | uniq | grep -v "^NA$" | perl -pe 's/_/ /' > output/blast/potentialHits/${base##*/}species_list.txt
+done
+
+### These two have special requirements
+grep -f amoebozoaGenera.txt output/blast/potentialHits/Amoebozoa_Ami6F1*potential_hits.txt | cut -f 8,8 | grep -v species | sort | uniq | grep -v "^NA$" | perl -pe 's/_/ /' > output/blast/potentialHits/Amoebozoa_Ami6F1_Ami9R_species_list.txt
+
+grep "Hexamitidae\|Enteromonadidae" output/blast/potentialHits/Diplomonadida_DimA*potential_hits.txt | cut -f 8,8 | grep -v species | sort | uniq | grep -v "^NA$" | perl -pe 's/_/ /' > output/blast/potentialHits/Diplomonadida_DimA_DimB_species_list.txt
+
+grep "Armophorea\|Colpodea\|Litostomatea\|Nassophorea\|Odontostomatea\|Oligohymenophorea\|Phyllopharyngea\|Plagiopylea\|Prostomatea\|Spirotrichea\|Heterotrichea\|Karyorelictea" output/blast/potentialHits/Ciliophora*potential_hits.txt | cut -f 8,8 | grep -v species | sort | uniq | grep -v "^NA$" | perl -pe 's/_/ /' > output/blast/potentialHits/Ciliophora_121F_1147R_species_list.txt
+
+
+
+wc -l output/blast/potentialHits/*_species_list.txt | perl -pe 's/^\s+//' > output/summaryTable/potentialHitsSpeciesCount_species_list.txt
+```
+
+## Find proportion of PrimerTree hits that are on-target
+This is to find out how specific each primer is to the target taxa. Basically, I'm running an unrestricted PrimerTree analysis, exporting the taxonomy of the hits and counting the proportion that are on-target.
+
+### Run PrimerTree to find the propotion of on-target hits
+
+```{r primerTreeAll, eval = FALSE}
+primers <- read.delim("primerInputParasites.txt", header = F, comment.char = "#")
+
+doneFiles <- list.files(path = "output/unrestrictedPrimerTree/primerTreeObj/", pattern = "_primerTree.RData")
+doneFiles <- as.character(lapply(doneFiles, function(x) gsub("_primerTree.RData", "", x)))
+
+for(i in 1:nrow(primers)) {
+  fwd <- as.character(primers[i, 2])
+  rev <- as.character(primers[i, 4])
+  min_len <- primers[i, 7]
+  max_len <- primers[i, 8]
+
+  lab <- as.character(paste(primers[i, 1], primers[i,3], sep = "_"))
+
+  if(!lab %in% doneFiles) {
+    primTree <- search_primer_pair(forward = fwd,
+                                   reverse = rev,
+                                   name = lab,
+                                   num_aligns = 10000,
+                                   num_permutations = 150,
+                                   min_length = min_len,
+                                   max_length = max_len)
+    
+    assign(lab, primTree)
+    
+    if(length(names(get(lab))) == 9) {
+      save(list = (as.character(lab)), 
+           file = paste("output/unrestrictedPrimerTree/primerTreeObj/", lab, "_primerTree.RData", sep = ""))
+    
+      if(length(names(get(lab)$sequence)) > 5) {
+        png(filename = paste("output/unrestrictedPrimerTree/figures/", lab, "_primerTree.png", sep = ""), 
+            width = 4000, 
+            height = 4000, 
+            res = 300)
+        
+        print(plot(get(lab), size = 1, main = gsub("_.+", "", lab)))
+        
+        dev.off()
+      }
+    
+      taxonomy <- get(lab)$taxonomy
+      write.table(taxonomy, file = paste("output/unrestrictedPrimerTree/taxonomy/", lab, "_taxonomy.txt", sep = ""), 
+                  quote = F, 
+                  sep = "\t", 
+                  col.names = T, 
+                  row.names = F)
+      
+      sequences <- get(lab)$sequence
+      write.dna(sequences, file = paste("output/unrestrictedPrimerTree/sequences/", lab, "_sequences.fasta", sep = ""), 
+                format = "fasta")
+  
+    }
+  }
+  rm(list = ls(pattern = lab))
+}
+```
+
+
+
+
+### List on and off-target species hit by primers
+
+Double check species columns
+
+```{bash listOnOffTarget, eval = FALSE}
+#banned words: sp., uncultured, unidentified, cf., isolate, symbiont
+  
+grep Apicomplexa output/unrestrictedPrimerTree/taxonomy/Apicomplexa18S_365_F_613_R_taxonomy.txt | cut -f 3,3 | grep -v "sp\." | grep -v "unidentified" | grep -v "cf\." | grep -v "isolate" | grep -v "symbiont" | grep -v "^NA$" | sort | uniq >  output/unrestrictedPrimerTree/taxonomy/species/On_Apicomplexa18S_365_F_613_R_SpeciesList.txt
+  
+grep Blastocystis output/unrestrictedPrimerTree/taxonomy/Blastocystis18S_F_R_taxonomy.txt | cut -f 3,3 | grep -v "sp\." | grep -v "unidentified" | grep -v "cf\." | grep -v "isolate" | grep -v "symbiont" | grep -v "^NA$" | sort | uniq > output/unrestrictedPrimerTree/taxonomy/species/On_Blastocystis18S_F_R_SpeciesList.txt
+  
+grep Kinetoplastida output/unrestrictedPrimerTree/taxonomy/Kinetoplastida_18S_4_R_taxonomy.txt | cut -f 3,3 | grep -v "sp\." | grep -v "unidentified" | grep -v "cf\." | grep -v "isolate" | grep -v "symbiont" | grep -v "^NA$" | sort | uniq > output/unrestrictedPrimerTree/taxonomy/species/On_Kinetoplastida_18S_4_R_SpeciesList.txt
+
+grep Microsporidia output/unrestrictedPrimerTree/taxonomy/Microsporidia_18S_F_R_taxonomy.txt | cut -f 7,7 | grep -v "sp\." | grep -v "unidentified" | grep -v "cf\." | grep -v "isolate" | grep -v "symbiont" | grep -v "^NA$" | sort | uniq > output/unrestrictedPrimerTree/taxonomy/species/On_Microsporidia_18S_F_R_SpeciesList.txt
+
+## parabasalia is distinct due to taxonomy
+grep -f parabasaliaGenera.txt output/unrestrictedPrimerTree/taxonomy/Parabasalia18S_288_F_654_R_taxonomy.txt | cut -f 3,3 | grep -v "sp\." | grep -v "cf\." | grep -v "isolate" | grep -v "unidentified" | grep -v "symbiont" |  grep -v "^NA$" | sort | uniq > output/unrestrictedPrimerTree/taxonomy/species/On_Parabasalia18S_288_F_654_R_SpeciesList.txt
+
+grep Apicomplexa output/unrestrictedPrimerTree/taxonomy/Plasmodium18S_883_F_1126_R_taxonomy.txt | cut -f 3,3 | grep -v "sp\." | grep -v "unidentified" | grep -v "cf\." | grep -v "isolate" | grep -v "symbiont" | grep -v "^NA$" | sort | uniq > output/unrestrictedPrimerTree/taxonomy/species/On_Plasmodium18S_883_F_1126_R_SpeciesList.txt
+
+grep Platyhelminthes output/unrestrictedPrimerTree/taxonomy/Platyhelminthes_18S3_F_3R_taxonomy.txt | cut -f 3,3 | grep -v "sp\." | grep -v "unidentified" | grep -v "cf\." | grep -v "isolate" | grep -v "symbiont" | grep -v "^NA$" | sort | uniq > output/unrestrictedPrimerTree/taxonomy/species/On_Platyhelminthes_18S3_F_3R_SpeciesList.txt
+  
+grep Nematoda output/unrestrictedPrimerTree/taxonomy/Spirurida18S_1435_F_1858_R_taxonomy.txt | cut -f 3,3 | grep -v "sp\." | grep -v "unidentified" | grep -v "cf\." | grep -v "isolate" | grep -v "symbiont" | grep -v "^NA$" | sort | uniq > output/unrestrictedPrimerTree/taxonomy/species/On_Spirurida18S_1435_F_1858_R_SpeciesList.txt
+
+grep Nematoda output/unrestrictedPrimerTree/taxonomy/Spirurida18S_F2_R2_taxonomy.txt | cut -f 3,3 | grep -v "sp\." | grep -v "unidentified" | grep -v "cf\." | grep -v "isolate" | grep -v "symbiont" | grep -v "^NA$" | sort | uniq > output/unrestrictedPrimerTree/taxonomy/species/On_Spirurida18S_F2_R2_SpeciesList.txt
+  
+grep Nematoda output/unrestrictedPrimerTree/taxonomy/Trichocephalida18S2_F_R_taxonomy.txt | cut -f 3,3 | grep -v "sp\." | grep -v "unidentified" | grep -v "cf\." | grep -v "isolate" | grep -v "symbiont" | grep -v "^NA$" | sort | uniq > output/unrestrictedPrimerTree/taxonomy/species/On_Trichocephalida18S2_F_R_SpeciesList.txt
+
+## Giardia Hexamitidae
+grep "Hexamitidae\|Enteromonadidae" output/unrestrictedPrimerTree/taxonomy/Diplomonadida_768_F_1059_R_taxonomy.txt | cut -f 3,3 | grep -v "sp\." | grep -v "unidentified" | grep -v "cf\." | grep -v "isolate" | grep -v "symbiont" | grep -v "^NA$" | sort | uniq > output/unrestrictedPrimerTree/taxonomy/species/On_Diplomonadida_768_F_1059_R_SpeciesList.txt
+
+## Crypto Cryptosporidiidae
+grep Apicomplexa output/unrestrictedPrimerTree/taxonomy/Eimeriorina18S_302_F_730_R_taxonomy.txt | cut -f 3,3 | grep -v "sp\." | grep -v "unidentified" | grep -v "cf\." | grep -v "isolate" | grep -v "symbiont" | grep -v "^NA$" | sort | uniq > output/unrestrictedPrimerTree/taxonomy/species/On_Eimeriorina18S_302_F_730_R_SpeciesList.txt
+
+## Amoebozoa 
+grep -f amoebozoaGenera.txt output/unrestrictedPrimerTree/taxonomy/Amoebozoa_18S_2_R_taxonomy.txt | cut -f 3,3 | grep -v "sp\." | grep -v "unidentified" | grep -v "cf\." | grep -v "isolate" | grep -v "symbiont" | grep -v "^NA$" | sort | uniq > output/unrestrictedPrimerTree/taxonomy/species/On_Amoebozoa_18S_2_R_SpeciesList.txt
+
+
+# Published primers
+for inFile in output/unrestrictedPrimerTree/taxonomy/Ciliophora*taxonomy.txt output/unrestrictedPrimerTree/taxonomy/Dinophyceae*taxonomy.txt  output/unrestrictedPrimerTree/taxonomy/Entamoeba*taxonomy.txt output/unrestrictedPrimerTree/taxonomy/Eukaryota*taxonomy.txt output/unrestrictedPrimerTree/taxonomy/Fungi*taxonomy.txt output/unrestrictedPrimerTree/taxonomy/Kinetoplastidia*taxonomy.txt output/unrestrictedPrimerTree/taxonomy/Microsporidia_V1*taxonomy.txt output/unrestrictedPrimerTree/taxonomy/Trichomonadida*taxonomy.txt
+do
+  target=${inFile%%_*}
+  target=${target##*/}
+  target=${target/inetoplastidia/inetoplastida}
+  base=${inFile%taxonomy.txt}
+ 
+  grep ${target} ${inFile} | cut -f 3,3 | grep -v "sp\." | grep -v "unidentified" | grep -v "cf\." | grep -v "isolate" | grep -v "symbiont" | grep -v "^NA$" | sort | uniq > output/unrestrictedPrimerTree/taxonomy/species/On_${base##*/}SpeciesList.txt
+done
+
+### These three have special requirements
+grep -f amoebozoaGenera.txt output/unrestrictedPrimerTree/taxonomy/Amoebozoa_Ami6F1*taxonomy.txt | cut -f 3,3 | grep -v "sp\." | grep -v "unidentified" | grep -v "cf\." | grep -v "isolate" | grep -v "symbiont" | grep -v "^NA$" | sort | uniq > output/unrestrictedPrimerTree/taxonomy/species/On_Amoebozoa_Ami6F1_Ami9R_SpeciesList.txt
+
+grep "Hexamitidae\|Enteromonadidae" output/unrestrictedPrimerTree/taxonomy/Diplomonadida_DimA*taxonomy.txt | cut -f 3,3 | grep -v "sp\." | grep -v "unidentified" | grep -v "cf\." | grep -v "isolate" | grep -v "symbiont" | grep -v "^NA$" | sort | uniq > output/unrestrictedPrimerTree/taxonomy/species/On_Diplomonadida_DimA_DimB_SpeciesList.txt
+
+grep "Armophorea\|Colpodea\|Litostomatea\|Nassophorea\|Odontostomatea\|Oligohymenophorea\|Phyllopharyngea\|Plagiopylea\|Prostomatea\|Spirotrichea\|Heterotrichea\|Karyorelictea" output/unrestrictedPrimerTree/taxonomy/Ciliophora*taxonomy.txt | cut -f 3,3 | grep -v "sp\." | grep -v "unidentified" | grep -v "cf\." | grep -v "isolate" | grep -v "symbiont" | grep -v "^NA$" | sort | uniq > output/unrestrictedPrimerTree/taxonomy/species/On_Ciliophora_121F_1147R_SpeciesList.txt
+
+
+
+
+
+
+##########################################  
+##### off-target
+##########################################
+
+grep -v Apicomplexa output/unrestrictedPrimerTree/taxonomy/Apicomplexa18S_365_F_613_R_taxonomy.txt | cut -f 3,3 | grep -v "species" | grep -v -v "sp\." | grep -v "unidentified" | grep -v "cf\." | grep -v "isolate" | grep -v "symbiont" | grep -v "^NA$" | sort | uniq >  output/unrestrictedPrimerTree/taxonomy/species/Off_Apicomplexa18S_365_F_613_R_SpeciesList.txt
+  
+grep -v Blastocystis output/unrestrictedPrimerTree/taxonomy/Blastocystis18S_F_R_taxonomy.txt | cut -f 3,3 | grep -v "species" | grep -v "sp\." | grep -v "unidentified" | grep -v "cf\." | grep -v "isolate" | grep -v "symbiont" | grep -v "^NA$" | sort | uniq > output/unrestrictedPrimerTree/taxonomy/species/Off_Blastocystis18S_F_R_SpeciesList.txt
+  
+grep -v Kinetoplastida output/unrestrictedPrimerTree/taxonomy/Kinetoplastida_18S_4_R_taxonomy.txt | cut -f 3,3 | grep -v "species" | grep -v "sp\." | grep -v "unidentified" | grep -v "cf\." | grep -v "isolate" | grep -v "symbiont" | grep -v "^NA$" | sort | uniq > output/unrestrictedPrimerTree/taxonomy/species/Off_Kinetoplastida_18S_4_R_SpeciesList.txt
+
+grep -v Microsporidia output/unrestrictedPrimerTree/taxonomy/Microsporidia_18S_F_R_taxonomy.txt | cut -f 7,7 | grep -v "species" | grep -v "sp\." | grep -v "unidentified" | grep -v "cf\." | grep -v "isolate" | grep -v "symbiont" | grep -v "^NA$" | sort | uniq > output/unrestrictedPrimerTree/taxonomy/species/Off_Microsporidia_18S_F_R_SpeciesList.txt
+
+## parabasalia is distinct due to taxonomy
+########################### check
+grep -v -f parabasaliaGenera.txt output/unrestrictedPrimerTree/taxonomy/Parabasalia18S_288_F_654_R_taxonomy.txt | cut -f 3,3 | grep -v "species" | grep -v "sp\." | grep -v "cf\." | grep -v "isolate" | grep -v "unidentified" | grep -v "symbiont" |  grep -v "^NA$" | sort | uniq > output/unrestrictedPrimerTree/taxonomy/species/Off_Parabasalia18S_288_F_654_R_SpeciesList.txt
+
+grep -v Apicomplexa output/unrestrictedPrimerTree/taxonomy/Plasmodium18S_883_F_1126_R_taxonomy.txt | cut -f 3,3 | grep -v "species" | grep -v "sp\." | grep -v "unidentified" | grep -v "cf\." | grep -v "isolate" | grep -v "symbiont" | grep -v "^NA$" | sort | uniq > output/unrestrictedPrimerTree/taxonomy/species/Off_Plasmodium18S_883_F_1126_R_SpeciesList.txt
+
+grep -v Platyhelminthes output/unrestrictedPrimerTree/taxonomy/Platyhelminthes_18S3_F_3R_taxonomy.txt | cut -f 3,3 | grep -v "species" | grep -v "sp\." | grep -v "unidentified" | grep -v "cf\." | grep -v "isolate" | grep -v "symbiont" | grep -v "^NA$" | sort | uniq > output/unrestrictedPrimerTree/taxonomy/species/Off_Platyhelminthes_18S3_F_3R_SpeciesList.txt
+  
+grep -v Nematoda output/unrestrictedPrimerTree/taxonomy/Spirurida18S_1435_F_1858_R_taxonomy.txt | cut -f 3,3 | grep -v "species" | grep -v "sp\." | grep -v "unidentified" | grep -v "cf\." | grep -v "isolate" | grep -v "symbiont" | grep -v "^NA$" | sort | uniq > output/unrestrictedPrimerTree/taxonomy/species/Off_Spirurida18S_1435_F_1858_R_SpeciesList.txt
+
+grep -v Nematoda output/unrestrictedPrimerTree/taxonomy/Spirurida18S_F2_R2_taxonomy.txt | cut -f 3,3 | grep -v "species" | grep -v "sp\." | grep -v "unidentified" | grep -v "cf\." | grep -v "isolate" | grep -v "symbiont" | grep -v "^NA$" | sort | uniq > output/unrestrictedPrimerTree/taxonomy/species/Off_Spirurida18S_F2_R2_SpeciesList.txt
+  
+grep -v Nematoda output/unrestrictedPrimerTree/taxonomy/Trichocephalida18S2_F_R_taxonomy.txt | cut -f 3,3 | grep -v "species" | grep -v "sp\." | grep -v "unidentified" | grep -v "cf\." | grep -v "isolate" | grep -v "symbiont" | grep -v "^NA$" | sort | uniq > output/unrestrictedPrimerTree/taxonomy/species/Off_Trichocephalida18S2_F_R_SpeciesList.txt
+
+## Giardia Hexamitidae
+grep -v "Hexamitidae\|Enteromonadidae" output/unrestrictedPrimerTree/taxonomy/Diplomonadida_768_F_1059_R_taxonomy.txt | cut -f 3,3 | grep -v "species" | grep -v "sp\." | grep -v "unidentified" | grep -v "cf\." | grep -v "isolate" | grep -v "symbiont" | grep -v "^NA$" | sort | uniq > output/unrestrictedPrimerTree/taxonomy/species/Off_Diplomonadida_768_F_1059_R_SpeciesList.txt
+
+## Crypto Cryptosporidiidae
+grep -v Apicomplexa output/unrestrictedPrimerTree/taxonomy/Eimeriorina18S_302_F_730_R_taxonomy.txt | cut -f 3,3 | grep -v "species" | grep -v "sp\." | grep -v "unidentified" | grep -v "cf\." | grep -v "isolate" | grep -v "symbiont" | grep -v "^NA$" | sort | uniq > output/unrestrictedPrimerTree/taxonomy/species/Off_Eimeriorina18S_302_F_730_R_SpeciesList.txt
+
+## Amoebozoa 
+grep -v -f amoebozoaGenera.txt output/unrestrictedPrimerTree/taxonomy/Amoebozoa_18S_2_R_taxonomy.txt | cut -f 3,3 | grep -v "sp\." | grep -v "unidentified" | grep -v "cf\." | grep -v "isolate" | grep -v "symbiont" | grep -v "^NA$" | sort | uniq > output/unrestrictedPrimerTree/taxonomy/species/Off_Amoebozoa_18S_2_R_SpeciesList.txt
+
+
+# Published primers
+for inFile in output/unrestrictedPrimerTree/taxonomy/Ciliophora*taxonomy.txt output/unrestrictedPrimerTree/taxonomy/Dinophyceae*taxonomy.txt  output/unrestrictedPrimerTree/taxonomy/Entamoeba*taxonomy.txt output/unrestrictedPrimerTree/taxonomy/Eukaryota*taxonomy.txt output/unrestrictedPrimerTree/taxonomy/Fungi*taxonomy.txt output/unrestrictedPrimerTree/taxonomy/Kinetoplastidia*taxonomy.txt output/unrestrictedPrimerTree/taxonomy/Microsporidia_V1*taxonomy.txt output/unrestrictedPrimerTree/taxonomy/Trichomonadida*taxonomy.txt
+do
+  target=${inFile%%_*}
+  target=${target##*/} 
+  target=${target/inetoplastidia/inetoplastida}
+  base=${inFile%taxonomy.txt}
+ 
+  grep -v ${target} ${inFile} | cut -f 3,3 | grep -v "sp\." | grep -v "unidentified" | grep -v "cf\." | grep -v "isolate" | grep -v "symbiont" | grep -v "^NA$" | sort | uniq > output/unrestrictedPrimerTree/taxonomy/species/Off_${base##*/}SpeciesList.txt
+done
+
+### These three have special requirements
+grep -v -f amoebozoaGenera.txt output/unrestrictedPrimerTree/taxonomy/Amoebozoa_Ami6F1*taxonomy.txt | cut -f 3,3 | grep -v "sp\." | grep -v "unidentified" | grep -v "cf\." | grep -v "isolate" | grep -v "symbiont" | grep -v "^NA$" | sort | uniq > output/unrestrictedPrimerTree/taxonomy/species/Off_Amoebozoa_Ami6F1_Ami9R_SpeciesList.txt
+
+grep -v "Hexamitidae\|Enteromonadidae" output/unrestrictedPrimerTree/taxonomy/Diplomonadida_DimA*taxonomy.txt | cut -f 3,3 | grep -v "sp\." | grep -v "unidentified" | grep -v "cf\." | grep -v "isolate" | grep -v "symbiont" | grep -v "^NA$" | sort | uniq > output/unrestrictedPrimerTree/taxonomy/species/Off_Diplomonadida_DimA_DimB_SpeciesList.txt
+
+grep -v "Armophorea\|Colpodea\|Litostomatea\|Nassophorea\|Odontostomatea\|Oligohymenophorea\|Phyllopharyngea\|Plagiopylea\|Prostomatea\|Spirotrichea\|Heterotrichea\|Karyorelictea" output/unrestrictedPrimerTree/taxonomy/Ciliophora*taxonomy.txt | cut -f 3,3 | grep -v "sp\." | grep -v "unidentified" | grep -v "cf\." | grep -v "isolate" | grep -v "symbiont" | grep -v "^NA$" | sort | uniq > output/unrestrictedPrimerTree/taxonomy/species/Off_Ciliophora_121F_1147R_SpeciesList.txt
+
+
+
+
+wc -l output/unrestrictedPrimerTree/taxonomy/species/On_*SpeciesList.txt | perl -pe 's/^\s+//' > output/summaryTable/OnTargetSpeciesCount_SpeciesList.txt
+wc -l output/unrestrictedPrimerTree/taxonomy/species/Off_*SpeciesList.txt | perl -pe 's/^\s+//' > output/summaryTable/OffTargetSpeciesCount_SpeciesList.txt
+```
+
+
+## Make up summary table for paper
+use:
+Percent of species on target
+  output/summaryTable/OnTargetSpeciesCount_SpeciesList.txt
+  output/summaryTable/OffTargetSpeciesCount_SpeciesList.txt
+
+Number of species found and in NCBI
+  output/summaryTable/hitsSpeciesCount_SpeciesList.txt
+  output/summaryTable/potentialHitsSpeciesCount_species_list.txt
+
+Primer taxonomic specificity
+  output/blast/topHitSummary/family/${base}Counts.txt
+  output/blast/topHitSummary/genus/${base}Counts.txt
+  output/blast/topHitSummary/species/${base}Counts.txt
+
+```{r makingSummaryTable, eval = FALSE}
+#############################################
+### Number of species found and in NCBI total
+foundCounts <- read.delim("output/summaryTable/hitsSpeciesCount_SpeciesList.txt", header = F, sep = " ")
+colnames(foundCounts) <- c("Species found", "Primer")
+foundCounts <- subset(foundCounts, Primer != "total")
+foundCounts$Primer <- gsub(".+/", "", foundCounts$Primer)
+foundCounts$Primer <- gsub("_SpeciesList.txt", "", foundCounts$Primer)
+
+potentialCounts <- read.delim("output/summaryTable/potentialHitsSpeciesCount_species_list.txt", header = F, sep = " ")
+colnames(potentialCounts) <- c("Species In NCBI", "Primer")
+potentialCounts <- subset(potentialCounts, Primer != "total")
+potentialCounts$Primer <- gsub(".+/", "", potentialCounts$Primer)
+potentialCounts$Primer <- gsub("_species_list.txt", "", potentialCounts$Primer)
+
+summaryTable <- merge(foundCounts, potentialCounts, all = T)
+
+summaryTable$`Species In NCBI` <- paste(
+  prettyNum(summaryTable$`Species In NCBI`, big.mark = ","), 
+  " (", 
+  round(100 * (summaryTable$`Species found` / summaryTable$`Species In NCBI`), digits = 1), 
+  "%)", 
+  sep = "")
+
+summaryTable$`Species found` <- prettyNum(summaryTable$`Species found`, big.mark = ",")
+
+rownames(summaryTable) <- summaryTable$Primer
+
+##############################################
+### Mean number of species matching each blast query and % single match
+for(tLevel in c("family", "genus", "species")) {
+  specificityFiles <- list.files(paste("output/blast/topHitSummary/", tLevel, "/", sep = ""), pattern = "Counts.txt", full.names = T)
+  for(inFile in specificityFiles) {
+    Primer <- gsub(".+/", "", inFile)
+    Primer <- gsub("Counts.txt", "", Primer)
+    
+    dataDf <- read.delim(inFile, header = F, sep = " ")
+    
+    summaryTable[Primer, paste(tLevel, " mean", sep = "")] <- round(mean(dataDf$V1), digits = 1)
+    
+    summaryTable[Primer, paste(tLevel, " % single", sep = "")] <- paste(round(100 * (sum(dataDf$V1 == 1) / length(dataDf$V1)), digits = 1), "%", sep = "")
+  }
+}
+
+###############################################
+### % species on target
+onTargetCounts <- read.delim("output/summaryTable/OnTargetSpeciesCount_SpeciesList.txt", header = F, sep = " ")
+colnames(onTargetCounts) <- c("On target", "Primer")
+onTargetCounts <- subset(onTargetCounts, Primer != "total")
+onTargetCounts$Primer <- gsub(".+/", "", onTargetCounts$Primer)
+onTargetCounts$Primer <- gsub("_SpeciesList.txt", "", onTargetCounts$Primer)
+onTargetCounts$Primer <- gsub("On_", "", onTargetCounts$Primer)
+
+summaryTable <- merge(summaryTable, onTargetCounts, all = T)
+
+offTargetCounts <- read.delim("output/summaryTable/OffTargetSpeciesCount_SpeciesList.txt", header = F, sep = " ")
+colnames(offTargetCounts) <- c("Off target", "Primer")
+offTargetCounts <- subset(offTargetCounts, Primer != "total")
+offTargetCounts$Primer <- gsub(".+/", "", offTargetCounts$Primer)
+offTargetCounts$Primer <- gsub("_SpeciesList.txt", "", offTargetCounts$Primer)
+offTargetCounts$Primer <- gsub("Off_", "", offTargetCounts$Primer)
+
+summaryTable <- merge(summaryTable, offTargetCounts, all = T)
+
+summaryTable$`% Species on-target` <- paste(round(100 * (summaryTable$`On target` / (summaryTable$`On target` + summaryTable$`Off target`)), digits = 1), "%", sep = "")
+
+write.table(summaryTable, file = 'output/summaryTable/finalTable.txt', quote = F, sep = "\t", row.names = F, col.names = T, na = "")
+```
+

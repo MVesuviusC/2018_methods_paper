@@ -876,7 +876,7 @@
 <div class="row row-offcanvas row-offcanvas-right">
 <div class="contents col-xs-12 col-md-10">
 <h1 id="testing-samples-for-parasites">Testing samples for parasites</h1>
-<h2 id="load-libraries">Load libraries</h2>
+<h3 id="load-libraries">Load libraries</h3>
 <div class="row">
 <button class="source R toggle btn btn-xs btn-primary">
 <span class="glyphicon glyphicon-chevron-down"></span> R source
@@ -887,22 +887,24 @@ library(plyr)
 theme_set(theme_bw())
 theme_update(plot.title = element_text(hjust = 0.5))</code></pre>
 </div>
-<h2 id="setup">Setup</h2>
+<h3 id="setup">Setup</h3>
 <div class="row">
 <button class="source bash toggle btn btn-xs btn-primary">
 <span class="glyphicon glyphicon-chevron-down"></span> bash source
 </button>
 <pre style=""><code class="source bash">mkdir output
 mkdir misc
+mkdir output/noDimers
+mkdir output/noDimers/paired
 mkdir output/fastqc
 mkdir output/primersRemoved
-mkdir output/primersRemoved/paired
-mkdir output/primersRemoved/noShort
 mkdir output/pandaseqd
-mkdir output/pandaseqd/noShort
-mkdir output/blastOut
-mkdir output/pandaseqd/noShort/unwanted
-cp ../firstMiseqTest/misc/unculturedOrgs.gi misc/</code></pre>
+mkdir output/primersRemoved/noShort
+mkdir output/blast
+mkdir output/blast/mergedRaw
+mkdir output/blast/mothured
+mkdir output/blast/inputFiles
+mkdir output/blast/output</code></pre>
 </div>
 <h2 id="parse-out-raw-fastq-files">Parse out raw fastq files</h2>
 <div class="row">
@@ -1247,29 +1249,399 @@ Options:
 <button class="source bash toggle btn btn-xs btn-primary">
 <span class="glyphicon glyphicon-chevron-down"></span> bash source
 </button>
-<pre style=""><code class="source bash"># run from  ~/SerreDLab-3/raw_reads/2017-09-12_UMB/ folder
-perl ~/SerreDLab-3/cannonm3/scripts/fastqTools/parseFastqBarcodesDualIndexTemp.pl -I7  MCHB1_20170908_M01994_IL100092583_NoIndex_L001_R2.fastq.gz -I5  MCHB1_20170908_M01994_IL100092583_NoIndex_L001_R3.fastq.gz -R1  MCHB1_20170908_M01994_IL100092583_NoIndex_L001_R1.fastq.gz -R2  MCHB1_20170908_M01994_IL100092583_NoIndex_L001_R4.fastq.gz --keyFile sampleKey.txt --verbose --errors 0
+<pre style=""><code class="source bash">path=~/SerreDLab-3/raw_reads/2017-12-05_UMB
 
-parallel -j 10 'gzip {}' ::: parsedFastqFiles/*.fastq</code></pre>
+qsub -N parseRaw -cwd -P dserre-lab -o qsubOut -e qsubOut -l mem_free=10G -q threaded.q -pe thread 5 -b y \
+      perl ~/SerreDLab-3/cannonm3/scripts/fastqTools/parseFastqBarcodesDualIndexTemp.pl \
+      -I7  ${path}/MCHB1_20171130_7001153F_IL100096103_S1_L001_R2.fastq.gz \
+      -I5  ${path}/MCHB1_20171130_7001153F_IL100096103_S1_L001_R3.fastq.gz \
+      -R1  ${path}/MCHB1_20171130_7001153F_IL100096103_S1_L001_R1.fastq.gz \
+      -R2  ${path}/MCHB1_20171130_7001153F_IL100096103_S1_L001_R4.fastq.gz \
+      --keyFile makingBarcodeKeyFile/allSamplesKeyCorrected.txt \
+      --errors 0 \
+      --outDir ${path}/parsed/
+            
+qsub -N gzipParseRawR1 -hold_jid parseRaw -cwd -P dserre-lab -o qsubOut -e qsubOut -l mem_free=1G -q threaded.q -pe thread 40 -b y parallel -j 10 'gzip {}' ::: ${path}/parsed/*R1.fastq
+
+qsub -N gzipParseRawR2 -hold_jid parseRaw -cwd -P dserre-lab -o qsubOut -e qsubOut -l mem_free=1G -q threaded.q -pe thread 40 -b y parallel -j 10 'gzip {}' ::: ${path}/parsed/*R2.fastq</code></pre>
 </div>
-<h2 id="run-pandaseq">Run pandaseq</h2>
+<h2 id="trim-the-reads-to-250bp">Trim the reads to 250bp</h2>
+<p>Trimming to allow older version of pandaseq to work</p>
+<div class="row">
+
+</div>
+<div class="row">
+<button class="source perl toggle btn btn-xs btn-primary">
+<span class="glyphicon glyphicon-chevron-down"></span> perl source
+</button>
+<pre style=""><code class="source perl">#!/usr/bin/perl
+use strict;
+use warnings;
+
+@ARGV = map { s/(.*\.gz)\s*$/gzip -dc < $1|/;$_ } @ARGV;
+
+my $seqlength = shift;
+my $FileName = shift;
+open my $File, "$FileName" or die "Could not open file\n";
+
+
+while (my $FileLine = <$File>) { #Go through the file
+    my @Lines = getThreeLines($File); #get the next three lines
+    unshift(@Lines, $FileLine); # put all the lines together
+    chomp @Lines;
+    $Lines[1]=substr($Lines[1],0,length($Lines[1]) - $seqlength);
+    $Lines[3]=substr($Lines[3],0,length($Lines[3]) - $seqlength);
+    print join("\n",@Lines)."\n";    
+}
+
+
+sub getThreeLines {
+    my $fh = shift;
+    my $first = <$fh>;
+    my @storage = $first;
+    for(my $i=0;$i<2;$i++){
+        my $nextLine = <$fh>;
+        push(@storage, $nextLine);
+    }
+    chomp @storage;
+    return @storage;
+}</code></pre>
+</div>
 <div class="row">
 <button class="source bash toggle btn btn-xs btn-primary">
 <span class="glyphicon glyphicon-chevron-down"></span> bash source
 </button>
-<pre style=""><code class="source bash">for forward in /home/matthewcannon/SerreDLab-3/raw_reads/2017-09-12_UMB/parsedFastqFiles/[FS]*R1.fastq.gz  
-do 
-  reverse=${forward%%R1.fastq.gz}R2.fastq.gz 
-  base=${forward%%R1.fastq.gz}
-  base=${base##*/}
-  output=${forward%%R1.fastq.gz}.fastq
-  output=${output##*/}
+<pre style=""><code class="source bash">qsub -hold_jid gzipParseRawR1,gzipParseRawR2 -N trim250R1 -cwd -P dserre-lab -o qsubOutTrim -e qsubOutTrim -l mem_free=1G -q threaded.q -pe thread 40 -b y parallel -j 30 'perl /home/matthewcannon/SerreDLab-3/cannonm3/scripts/trimFastqFrom3prime.pl 51 {} \| gzip \> output/trimmed/{/}' ::: ~/SerreDLab-3/raw_reads/2017-12-05_UMB/parsed/[ACDPSV]*R1.fastq.gz
 
-  zcat ${forward} ~/SerreDLab-3/raw_reads/2017-07-07_UMB/parsedFastqFiles/${base}R1.fastq.gz > tempR1.fastq
-  zcat ${reverse} ~/SerreDLab-3/raw_reads/2017-07-07_UMB/parsedFastqFiles/${base}R2.fastq.gz > tempR2.fastq
-  
-  pandaseq -T 30 -F -L 500 -B -f tempR1.fastq -r tempR2.fastq 2> output/pandaseqd/${output}Log.txt | gzip > output/pandaseqd/${output}.gz
-done</code></pre>
+qsub -hold_jid gzipParseRawR1,gzipParseRawR2 -N trim250R2 -cwd -P dserre-lab -o qsubOutTrim -e qsubOutTrim -l mem_free=1G -q threaded.q -pe thread 40 -b y parallel -j 30 'perl /home/matthewcannon/SerreDLab-3/cannonm3/scripts/trimFastqFrom3prime.pl 51 {} \| gzip \> output/trimmed/{/}' ::: ~/SerreDLab-3/raw_reads/2017-12-05_UMB/parsed/[ACDPSV]*R2.fastq.gz</code></pre>
+</div>
+<h2 id="get-rid-of-dimers">Get rid of dimers</h2>
+Use quality of end of reads to identify and toss dimer sequences
+<div class="row">
+
+</div>
+<div class="row">
+<button class="source perl toggle btn btn-xs btn-primary">
+<span class="glyphicon glyphicon-chevron-down"></span> perl source
+</button>
+<pre style=""><code class="source perl">#!/usr/bin/perl
+use warnings;
+use strict;
+use Getopt::Long;
+use Pod::Usage;
+
+##############################
+# By Matt Cannon
+# Date: 12/06/2017
+# Last modified: 12/06/2017
+# Title: tossDimersByEndQual.pl
+# Purpose: Toss out reads with low quality 3' ends (dimers)
+##############################
+
+##############################
+# Options
+##############################
+
+
+my $verbose;
+my $help;
+my $fastq;
+my $length = 20;
+my $minQual = 20;
+
+# i = integer, s = string
+GetOptions ("verbose"           => \$verbose,
+            "help"              => \$help,
+            "fastq=s"           => \$fastq,
+            "length=i"          => \$length,
+            "minQual=i"         => \$minQual
+            )
+or pod2usage(0) && exit;
+
+pod2usage(1) && exit if ($help);
+
+##############################
+# Global variables
+##############################
+# my %barcodeHash;
+# my %barcodeCountHash;
+# my %outputFileHash;
+# my $counter = 1;
+# my %linesToPrint;
+
+##############################
+# Code
+##############################
+
+##############################
+### Let the script read in gzipped files
+
+$fastq =~ s/(.*\.gz)\s*$/gzip -dc < $1|/;
+
+open my $FASTQFILE, $fastq or die "Could not open fastq file\n";
+
+
+while (my $fileLine = <$FASTQFILE>) {
+    my @fastqLines = getThreeLines($FASTQFILE); #get the next three I5 lines
+    unshift(@fastqLines, $fileLine); # put all the I5 lines together
+    chomp @fastqLines;
+    my $qual = $fastqLines[3];
+    my $endOfQual = substr($qual, -1 * $length);
+    my @qualArray = split "", $endOfQual;
+    my $qualSum = 0;
+    for my $singleQual (@qualArray) {
+        $qualSum += (ord($singleQual) - 33);
+    }
+#    $fastq =~ s/.+\///;
+#    print $fastq, "\t", $qualSum / $length, "\n";
+    if(($qualSum / $length) >= $minQual) {
+        print join("\n", @fastqLines), "\n";
+    }
+}
+
+
+sub getThreeLines {
+    my $fh = shift;
+    my @storage;
+    for(my $i = 0; $i < 3; $i++){
+        my $nextLine = <$fh>;
+        push(@storage, $nextLine);
+    }
+    chomp @storage;
+    return @storage;
+}
+
+##############################
+# POD
+##############################
+
+=pod
+
+=head NAME
+
+tossDimersByEndQual.pl - kick out dimers by looking at 3' end fastq quality
+
+=head SYNOPSIS
+
+
+perl tossDimersByEndQual.pl [options] --fastq <file.fastq.gz> 
+
+=head OPTIONS
+
+This script .....>
+
+Options:
+
+=over 4
+
+=item B<--verbose>
+
+    Provide detailed progress summary.
+
+=item B<--help>
+
+    This stuff.
+
+
+
+=back
+
+=cut</code></pre>
+</div>
+<div class="row">
+<button class="source bash toggle btn btn-xs btn-primary">
+<span class="glyphicon glyphicon-chevron-down"></span> bash source
+</button>
+<pre style=""><code class="source bash">qsub -N tossDimersR1 -hold_jid trim250R1,trim250R2 -cwd -P dserre-lab -o qsubOutToss -e qsubOutToss -l mem_free=1G -q threaded.q -pe thread 40 -b y parallel -j 20 'perl ~/SerreDLab-3/cannonm3/scripts/fastqTools/tossDimersByEndQual.pl -f {} \| gzip \> output/noDimers/{/}' ::: output/trimmed/*R1.fastq.gz
+
+qsub -N tossDimersR2 -hold_jid trim250R1,trim250R2,tossDimersR1 -cwd -P dserre-lab -o qsubOutToss -e qsubOutToss -l mem_free=1G -q threaded.q -pe thread 40 -b y parallel -j 20 'perl ~/SerreDLab-3/cannonm3/scripts/fastqTools/tossDimersByEndQual.pl -f {} \| gzip \> output/noDimers/{/}' ::: output/trimmed/*R2.fastq.gz</code></pre>
+</div>
+<h2 id="remove-unpaired-reads">Remove unpaired reads</h2>
+<div class="row">
+
+</div>
+<div class="row">
+<button class="source perl toggle btn btn-xs btn-primary">
+<span class="glyphicon glyphicon-chevron-down"></span> perl source
+</button>
+<pre style=""><code class="source perl">#!/usr/bin/perl
+use warnings;
+use strict;
+use Getopt::Long;
+use Pod::Usage;
+
+##############################
+# By Matt Cannon
+# Date: 03/30/17
+# Last modified: 
+# Title: filterUnpairedFastq.pl
+# Purpose: 
+##############################
+
+##############################
+# Options
+##############################
+
+
+my $verbose;
+my $help;
+my $inputFile1;
+my $inputFile2;
+my $outputNameStub = "output";
+
+# i = integer, s = string
+GetOptions ("verbose"           => \$verbose,
+            "help"              => \$help,
+            "R1=s"      => \$inputFile1,
+        "R2=s"      => \$inputFile2,
+        "outputNameStub=s"  => \$outputNameStub
+            
+        )
+    or pod2usage(0) && exit;
+
+pod2usage(1) && exit if ($help);
+
+
+##############################
+# Global variables
+##############################
+
+
+##############################
+# Code
+##############################
+
+
+$inputFile1 =~ s/(.*\.gz)\s*$/gzip -dc < $1|/;
+$inputFile2 =~ s/(.*\.gz)\s*$/gzip -dc < $1|/;
+
+
+##############################
+### Stuff
+### More stuff
+
+my %r1Hash;
+my $line = 1;
+my $storage;
+my @fileArray = @ARGV;
+my $lengthWindow = shift;
+
+if($verbose) {
+    print STDERR "Reading R1 and making hash\n";
+}
+open INPUT1FILE, "$inputFile1" or die "Could not open first input\nWell, crap\n";
+while (my $input = <INPUT1FILE>){
+    chomp $input;
+    if($line==1) {
+        $storage=$input;
+    } elsif($line<4) {
+        $storage = join("\n",$storage, $input);
+    } elsif($line == 4) {
+        $storage = join("\n",$storage, $input);
+        makeR1Hash($storage);
+        $line=0;
+    }
+    $line++;
+}
+close INPUT1FILE;
+if($verbose){
+    print STDERR "R1 parsed and stored\n";
+}
+
+
+
+open R1OUTFILE, ">", $outputNameStub . "_R1.fastq";
+open R2OUTFILE, ">", $outputNameStub . "_R2.fastq";
+
+
+if($verbose) {
+    print STDERR "Reading R2 and printing paired reads\n";
+}
+
+open INPUT2FILE, "$inputFile2" or die "Could not open R2 input\nWell, crap\n";
+while (my $input = <INPUT2FILE>){
+    chomp $input;
+    if($line == 1) {
+        $storage=$input;
+    } elsif($line < 4) {
+        $storage = join("\n",$storage, $input);
+    } elsif($line == 4) {
+        $storage = join("\n",$storage, $input);
+        my ($header, $sequence, $header2, $quality) = split "\n", $storage;
+        my ($headerStub) = split " ", $header;
+        if(exists($r1Hash{$headerStub}) && $header !~ /noPrimer/ && length($sequence) > 0) {
+        print R1OUTFILE $r1Hash{$headerStub}, "\n";
+        print R2OUTFILE $storage, "\n";
+        }
+        $line=0;
+    }
+    $line++;
+}
+close INPUT1FILE;
+
+if($verbose) {
+    print STDERR "Done!\n";
+}
+
+sub makeR1Hash {
+    my $fastq = shift;
+    my ($header, $sequence, $header2, $quality) = split "\n", $fastq;
+    my ($headerStub) = split " ", $header;
+    if($header !~ /noPrimer/ && length($sequence) > 0) {
+    $r1Hash{$headerStub} = $fastq;
+    }
+}
+
+
+
+##############################
+# POD
+##############################
+
+#=pod
+    
+=head SYNOPSIS
+
+Summary:    
+    
+    filterUnpairedFastq.pl - generates a consensus for a specified gene in a specified taxa
+    
+Usage:
+
+    perl filterUnpairedFastq.pl [options] 
+
+
+=head OPTIONS
+
+Options:
+
+    --verbose
+    --help
+    --R1
+    --R2
+    --outputNameStub
+
+=cut</code></pre>
+</div>
+<div class="row">
+<button class="source bash toggle btn btn-xs btn-primary">
+<span class="glyphicon glyphicon-chevron-down"></span> bash source
+</button>
+<pre style=""><code class="source bash">parallel -j 20 'name={}; shortname=${name%R1.fastq.gz}; base=output/noDimers/paired/${shortname##*/}; perl ~/SerreDLab-2/cannonm3/scripts/fastqTools/filterUnpairedFastq.pl --R1 {} --R2 ${shortname}R2.fastq.gz --out ${base}' ::: output/noDimers/*R1.fastq.gz</code></pre>
+</div>
+Then zip up all the fastq files
+<div class="row">
+<button class="source bash toggle btn btn-xs btn-primary">
+<span class="glyphicon glyphicon-chevron-down"></span> bash source
+</button>
+<pre style=""><code class="source bash">qsub -cwd -P dserre-lab -o qsubOutUnpaired -e qsubOutUnpaired -l mem_free=1G -q threaded.q -pe thread 30 -b y parallel -j 20 'gzip -f {}' ::: output/noDimers/paired/*fastq  </code></pre>
+</div>
+<h2 id="run-pandaseq">Run pandaSeq</h2>
+<div class="row">
+<button class="source bash toggle btn btn-xs btn-primary">
+<span class="glyphicon glyphicon-chevron-down"></span> bash source
+</button>
+<pre style=""><code class="source bash">parallel -j 10 'name={}; reverse=${name%%R1.fastq.gz}R2.fastq.gz; output=${name%%R1.fastq.gz}.fastq; output=${output##*/}; nice pandaseq -F -L 500 -B -T 5 -f {} -r ${reverse} 2> output/pandaseqd/${output}Log.txt | gzip > output/pandaseqd/${output}.gz' ::: output/noDimers/paired/*R1.fastq.gz</code></pre>
 </div>
 <h2 id="cut-primer-sequences-off-of-the-reads-and-put-primer-name-in-fastq-header">Cut primer sequences off of the reads and put primer name in fastq header</h2>
 <div class="row">
@@ -1305,6 +1677,7 @@ my %degeneratehash = ( #hash of arrays - degenerate bases with matching bases
                D =>["A","G","T"],
                H =>["A","C","T"],
                V =>["A","C","G"],
+               I =>["A","C","G","T"],
                N =>["A","C","G","T"]
                );
 
@@ -1319,25 +1692,14 @@ while (my $input = <INPUTFILE>){
 sub addPrimerToHash {
     my $input = shift; 
     my ($primerName, $primerF, $primerR) = split " ", $input;
-    $primerF = trimPrimer($primerF);
-    $primerR = trimPrimer($primerR);
     dealWithDegenerates($primerF,$primerName);
     dealWithDegenerates($primerR,$primerName);
-}
-
-sub trimPrimer {
-    my $primer = shift;
-    if(length($primer)<$lengthOfPrimerToMatch){
-    die "You can't trim that much primer!!!\nYour trim length is longer than your primer!!!";
-    }
-    my $trimmedPrimer = substr($primer,length($primer)-$lengthOfPrimerToMatch,$lengthOfPrimerToMatch); # get the last N bases
-    return($trimmedPrimer);
 }
 
 sub dealWithDegenerates {
     my $primer = $_[0];
     my $primerName = $_[1];
-    if($primer =~ /[WSMKRYBDHVN]/) { #if the primer has any degenerate bases, deconvolute those and add the subsequent primers to the hash
+    if($primer =~ /[WSMKRYBDHVIN]/) { #if the primer has any degenerate bases, deconvolute those and add the subsequent primers to the hash
     addDegeneratePrimer($primer,$primerName);
     } else {
     $primerHash{$primer}=$primerName;
@@ -1352,7 +1714,7 @@ sub addDegeneratePrimer {
     my $test = 1;
     while($test==1){
     for(my $i=0;$i<scalar(@primerArray);$i++) { # sort through primerArray
-        if($primerArray[$i] =~ /[WSMKRYBDHVN]/) { #if 
+        if($primerArray[$i] =~ /[WSMKRYBDHVIN]/) { #if 
         push( @tempArray, getNewPrimerVersions($primerArray[$i]) );
         } else {
         push( @tempArray, $primerArray[$i] ); #add normal primer to tempArray
@@ -1360,7 +1722,7 @@ sub addDegeneratePrimer {
     }
     @primerArray = @tempArray;
     @tempArray = ();
-    if(join("",@primerArray) =~ /[WSMKRYBDHVN]/ == 1){
+    if(join("",@primerArray) =~ /[WSMKRYBDHVIN]/ == 1){
         $test=1;
     } else {
         $test=0;
@@ -1379,7 +1741,7 @@ sub getNewPrimerVersions {
     my @tempArray=();
     for(my $i=0;$i<scalar(@baseArray);$i++){ #go through each base in the primer
     my $nucleotide = $baseArray[$i];
-    if($nucleotide =~ /[WSMKRYBDHVN]/) { #if that base has a degenerate base
+    if($nucleotide =~ /[WSMKRYBDHVIN]/) { #if that base has a degenerate base
         for(@{$degeneratehash{$nucleotide}}) { #go through the possible replacements 
         my @copyArray = @baseArray; # copy this array so we can modify it
         $copyArray[$i] = $_; #then switch out the base in the copy array with a possibility
@@ -1392,9 +1754,9 @@ sub getNewPrimerVersions {
 
 
 
-#for my $primerSeq (keys %primerHash) {
-#    print STDERR join("\t", $primerHash{$primerSeq}, $primerSeq) . "\n";
-#}
+for my $primerSeq (keys %primerHash) {
+    print STDERR join("\t", $primerHash{$primerSeq}, $primerSeq) . "\n";
+}
 
 close INPUTFILE;
 
@@ -1430,6 +1792,7 @@ sub trimSequence {
     $inputFileName2 =~ s/_SE[12].fastq.gz//;
     $inputFileName2 =~ s/.+\///;
     $inputFileName2 =~ s/R[12].fastq.gz//;
+    $inputFileName2 =~ s/R[12]_001.fastq.gz//;
     my $newHeader = $header;
     $newHeader = $newHeader . "|" . $trimmedSeqPrimerQual[1] . "|" . $inputFileName2;
     my $newfastq = join("\n", $newHeader,$trimmedSeqPrimerQual[0],"+",$trimmedSeqPrimerQual[2]);
@@ -1444,17 +1807,16 @@ sub searchSequenceForPrimer {
     my $primerHit="noPrimer";
     my $flag = 0;
     my @returnValue; 
-    my $firstFifty = substr($sequence,0,50);
+    #my $firstFifty = substr($sequence,0,50);
     my %matchCountHash;
     my %matchSeqHash;
     for my $primerSeq (keys %primerHash) {
     my $reverse = revComp($primerSeq);
-    if($firstFifty =~ /$primerSeq/) {
+    if($sequence =~ /^$primerSeq/) {
         $flag = 1;
         $matchCountHash{$primerHash{$primerSeq}}+=2; #count the number of times each primer is seen and add one extra to the forward primer matches to break ties if one primer is found from two different primer pairs
         $matchSeqHash{$primerHash{$primerSeq}}{forward}=$primerSeq; #store the primer sequence for later use
     } elsif($sequence =~ /$reverse/) {
-        #$matchCountHash{$primerHash{$primerSeq}}++; # make the forward read the only one that matters....
         $matchSeqHash{$primerHash{$primerSeq}}{reverse}=$reverse;
     } 
     }
@@ -1482,7 +1844,7 @@ sub searchSequenceForPrimer {
     }
     @returnValue = ($sequence,$primerHit,$qual);
     } else {
-    @returnValue = ("primerNotFound","noPrimer",$qual);
+    @returnValue = ($sequence,"noPrimer",$qual);
     }
     return @returnValue;
 }
@@ -1498,7 +1860,7 @@ sub revComp{
 <button class="source bash toggle btn btn-xs btn-primary">
 <span class="glyphicon glyphicon-chevron-down"></span> bash source
 </button>
-<pre style=""><code class="source bash">parallel -j 20 'perl ~/SerreDLab-2/cannonm3/scripts/CutOffSequenceFromFastqV2.pl 15 misc/primerKey.txt {} | gzip > output/primersRemoved/{/}' ::: output/pandaseqd/*fastq.gz</code></pre>
+<pre style=""><code class="source bash">parallel -j 20 'perl ~/SerreDLab-2/cannonm3/scripts/CutOffSequenceFromFastqV2_1.pl 15 misc/primerKey.txt {} | gzip > output/primersRemoved/{/}' ::: output/pandaseqd/*fastq.gz</code></pre>
 </div>
 <h2 id="filter-out-the-short-sequences">Filter out the short sequences</h2>
 <div class="row">
@@ -1551,17 +1913,33 @@ exit;</code></pre>
 <button class="source bash toggle btn btn-xs btn-primary">
 <span class="glyphicon glyphicon-chevron-down"></span> bash source
 </button>
-<pre style=""><code class="source bash">parallel -j 20 'zcat {} | perl ~/SerreDLab-2/cannonm3/scripts/filterShortFastq.pl 75 | gzip > output/primersRemoved/noShort/{/}' ::: output/primersRemoved/*fastq.gz</code></pre>
+<pre style=""><code class="source bash">parallel -j 20 'zcat {} | perl ~/SerreDLab-2/cannonm3/scripts/filterShortFastq.pl 150 | gzip > output/primersRemoved/noShort/{/}' ::: output/primersRemoved/*fastq.gz</code></pre>
 </div>
-<h2 id="put-all-the-fasta-files-together">Put all the fasta files together</h2>
+<h2 id="put-all-the-fasta-files-together-into-files-by-primer">Put all the fasta files together into files by primer</h2>
 Add the sample name to the file and combine.
 <div class="row">
 <button class="source bash toggle btn btn-xs btn-primary">
 <span class="glyphicon glyphicon-chevron-down"></span> bash source
 </button>
-<pre style=""><code class="source bash">zcat output/primersRemoved/noShort/*.fastq.gz | zgrep -A 1 @HWI | grep -v "^--" | perl -pe 's/\@HWI/>HWI/' > output/blastOut/merged_products.fa</code></pre>
+<pre style=""><code class="source bash">for primer in \
+  Apicomp18S_365-613 \
+  Blastocystis_18S \
+  Kinetoplastida_18S4 \
+  Microsporidia_18S \
+  Parab18S_288-654 \
+  Plasmo18S_883-1126 \
+  Platyhelminthes_18S3 \
+  Spirur18S_1435-1858 \
+  Spirurida_18S2 \
+  Trichocephalida_18S2 \
+  Eimeriorina18S_302-730 \
+  Diplomonadida_768-1059 \
+  Amoebozoa_18S2 \
+do
+  zcat output/primersRemoved/noShort/*.fastq.gz | grep -A 1 $primer | grep -v "^--" | perl -pe 's/\@70011/>70011/' > output/blast/mergedRaw/merged_products_${primer}.fa &
+done</code></pre>
 </div>
-<h2 id="get-only-unique-sequences">Get only unique sequences</h2>
+<h2 id="run-mothur-to-get-only-unique-sequences">Run mothur to get only unique sequences</h2>
 <div class="row">
 
 </div>
@@ -1645,16 +2023,18 @@ sub commify {
 <button class="source bash toggle btn btn-xs btn-primary">
 <span class="glyphicon glyphicon-chevron-down"></span> bash source
 </button>
-<pre style=""><code class="source bash">#gunzip -f output/blastOut/merged_products.fa.gz
-perl ~/SerreDLab-2/cannonm3/scripts/mattsMothur.pl output/blastOut/merged_products.fa
- 
-gawk -F"\t" '{print $2}' output/blastOut/merged_products.names > temp  
-perl -pe s/","/"\t"/g temp > output/blastOut/merged_products.names
-gzip -f output/blastOut/merged_products.names
-gzip -f output/blastOut/merged_products.unique.fasta
-gzip -f output/blastOut/merged_products.fa</code></pre>
+<pre style=""><code class="source bash">parallel -j 10 'perl ~/SerreDLab-2/cannonm3/scripts/mattsMothur.pl {}' ::: output/blast/mergedRaw/*.fa
+</code></pre>
 </div>
-<h2 id="filter-out-any-sequences-seen-less-than-5-times">Filter out any sequences seen less than 5 times</h2>
+<div class="row">
+<button class="source bash toggle btn btn-xs btn-primary">
+<span class="glyphicon glyphicon-chevron-down"></span> bash source
+</button>
+<pre style=""><code class="source bash">parallel -j 10 'gzip -f {}' ::: output/blast/mergedRaw/merged_products*.names
+parallel -j 10 'gzip -f {}' ::: output/blast/mergedRaw/merged_products*.unique.fasta
+parallel -j 10 'gzip -f {}' ::: output/blast/mergedRaw/merged_products*.fa</code></pre>
+</div>
+<h2 id="filter-out-any-sequences-seen-less-than-20-times">Filter out any sequences seen less than 20 times</h2>
 <div class="row">
 
 </div>
@@ -1666,20 +2046,69 @@ gzip -f output/blastOut/merged_products.fa</code></pre>
 use strict;
 use warnings;
 use English;
+use Getopt::Long;
+use Pod::Usage;
+
+
+##############################
+# By Matt Cannon
+# Date:
+# Last modified:
+# Title: .pl
+# Purpose:
+##############################
+
+##############################
+# Options
+##############################
+
+
+my $verbose;
+my $help;
+my $namesFile;
+my $fastaFile;
+my $cutoff = 1;
+my $output = "filterMotherOut";
 
 # This script takes the output from mothur and screens out any reads with less than X total occurences. 
 # syntax should be perl filterMothurByCount.pl 10 file.fa.gz file.names.gz > output.fa
 
-my $cutoff = shift;
+
+# i = integer, s = string
+GetOptions ("verbose"           => \$verbose,
+            "help"              => \$help,
+        "names=s"           => \$namesFile,
+        "fasta=s"           => \$fastaFile,
+        "cutoff=i"          => \$cutoff,
+        "output=s"          => \$output
+
+      )
+ or pod2usage(0) && exit;
+
+pod2usage(1) && exit if ($help);
+
+
+##############################
+# Global variables
+##############################
 my %namesHash;
+$fastaFile =~ s/(.*\.gz)\s*$/gzip -dc < $1|/;
+$namesFile =~ s/(.*\.gz)\s*$/gzip -dc < $1|/;
 
-@ARGV = map { s/(.*\.gz)\s*$/gzip -dc < $1|/;$_ } @ARGV;
+##############################
+# Code
+##############################
 
-my $inputFileName = shift;
-open INPUTFILE, "$inputFileName" or die "$OS_ERROR Could not open first input\nWell, crap\n";
+
+##############################
+### Stuff
+### More stuff
+
+open INPUTFILE, "$namesFile" or die "$OS_ERROR Could not open names input\nWell, crap\n";
 while (my $input = <INPUTFILE>){
     chomp $input;
-    my @names = split "\t", $input;
+    my (undef, $namesList) = split "\t", $input;
+    my @names = split ",", $namesList;
     if(scalar(@names) > $cutoff) {
         $namesHash{$names[0]}=$input;
     }
@@ -1687,23 +2116,17 @@ while (my $input = <INPUTFILE>){
 close INPUTFILE;
 
 
-my $inputFile2Name = shift;
 
 ##prep the files for writing out
-my $r2fileName = $inputFile2Name;
-$r2fileName =~ s/.+\///; #get rid of path and other crap
-$r2fileName =~ s/unique.fa.gz\|//;
-$r2fileName =~ s/unique.fasta.gz\|//;
-$r2fileName =~ s/unique.fna.gz\|//;
-my $r1fileName = $r2fileName;
-$r2fileName = $r2fileName . "unique.filtered.fa";
-$r1fileName = $r1fileName . "filtered.names";
-open my $r1File, '>', "output/$r1fileName";
-open my $r2File, '>', "output/$r2fileName";
+my $r2fileName = $output . "Unique.filtered.fa";
+my $r1fileName = $output . "Filtered.names";
+
+open my $r1File, '>', "$r1fileName";
+open my $r2File, '>', "$r2fileName";
 
 local $/ = "\n>"; #change the input delimiter to \n> so the script pulls in the whole fasta entry
 
-open INPUTFILE2, "$inputFile2Name" or die "$OS_ERROR Could not open first input\nWell, crap\n";
+open INPUTFILE2, "$fastaFile" or die "$OS_ERROR Could not open fasta input\nWell, crap\n";
 while (my $input = <INPUTFILE2>){
     chomp $input;
     my ($header,$sequence) = split "\n", $input;
@@ -1719,10 +2142,10 @@ close INPUTFILE2;</code></pre>
 <button class="source bash toggle btn btn-xs btn-primary">
 <span class="glyphicon glyphicon-chevron-down"></span> bash source
 </button>
-<pre style=""><code class="source bash">perl ~/SerreDLab-2/cannonm3/scripts/filterMothurByCount.pl 5 output/blastOut/merged_products.names.gz output/blastOut/merged_products.unique.fasta.gz
+<pre style=""><code class="source bash">parallel -j 10 'name={}; base=${name%names.gz}; perl ~/SerreDLab-2/cannonm3/scripts/filterMothurByCountV2.pl --cutoff 20 --names {} --fasta ${base}unique.fasta.gz --out output/blast/inputFiles/${base##*/}' ::: output/blast/mergedRaw/merged_products*.names.gz
 
-mv output/merged_products.* output/blastOut/
-#writes out two files: output/blastOut/merged_products.filtered.names  output/blastOut/merged_products.unique.filtered.fa</code></pre>
+#writes out two files: output/blast/mergedRaw/merged_products*Filtered.names         
+#                      output/blast/mergedRaw/merged_products*Unique.filtered.fa</code></pre>
 </div>
 <h1 id="blast-alignment">## Blast alignment ##</h1>
 <p>The filter environmental samples option on online blast using the Entrez query <code>all [filter] NOT(environmental samples[organism] OR metagenomes[orgn] OR txid32644[orgn])</code> to remove uncultured samples. In order to reproduce this I downloaded all the gi’s for the query <code>all [filter] NOT(environmental samples[organism] OR metagenomes[orgn] OR txid32644[orgn])</code> using a browser and put them in <code>data/uncultured_samples.gi.gz</code>. The gi’s are then filtered out using the -negative_gilist option.</p>
@@ -1730,9 +2153,9 @@ mv output/merged_products.* output/blastOut/
 <button class="source bash toggle btn btn-xs btn-primary">
 <span class="glyphicon glyphicon-chevron-down"></span> bash source
 </button>
-<pre style=""><code class="source bash">blastn -task blastn -negative_gilist ../thirdMiseqBrandyMosq/misc/unculturedOrgs.gi -db /export/databases/blast/nt -query output/blastOut/merged_products.unique.filtered.fa -outfmt 7 -num_threads 40 | gzip > output/blastOut/merged_products-blast.tab.gz</code></pre>
+<pre style=""><code class="source bash">qsub -cwd -P dserre-lab -o qsubOutUnpaired -e qsubOutUnpaired -l mem_free=10G -q threaded.q -pe thread 100 -b y parallel -j 2 'blastn -task blastn -negative_gilist ../thirdMiseqBrandyMosq/misc/unculturedOrgs.gi -db /home/matthewcannon/SerreDLab-3/databases/blast/nt -query output/blast/inputFiles/merged_products_{}.Unique.filtered.fa -outfmt 7 -num_threads 45 \| gzip \> output/blast/output/merged_products_{}-blast.tab.gz' ::: Amoebozoa_18S2 Apicomp18S_365-613 Blastocystis_18S  Diplomonadida_768-1059 Eimeriorina18S_302-730 Kinetoplastida_18S4 M30F2-M264R3 Microsporidia_18S Plasmo18S_883-1126 Platyhelminthes_18S3 Spirur18S_1435-1858 Spirurida_18S2 Trichocephalida_18S2 Parab18S_288-654  </code></pre>
 </div>
-<h2 id="parse-out-blast-results-using-the-.names-file">Parse out blast results using the .names file</h2>
+##Parse out blast results using the .names file
 <div class="row">
 
 </div>
@@ -1758,7 +2181,7 @@ my $inputFileName = shift;
 open INPUTFILE, "$inputFileName" or die "$OS_ERROR Could not open first input\nWell, crap\n";
 while (my $input = <INPUTFILE>){
     chomp $input;
-    makeNameHash($input);
+    countReadsPerLine($input);
 }
 close INPUTFILE;
 
@@ -1769,7 +2192,7 @@ while (my $input = <INPUTFILE>){
     chomp $input;
     my ($readName, $sequence) = split "\n", $input;
     $readName =~ s/>//;
-    $readName =~ s/:\|.+/:/; # cut off sample info
+    $readName =~ s/:1\|.+/:1/; # cut off sample info
     $readLengthHash{$readName} = length($sequence);
 }
 close INPUTFILE;
@@ -1785,18 +2208,12 @@ while (my $input = <INPUTFILE2>){
 }
 close INPUTFILE2;
 
-sub makeNameHash {
-    my ($firstRead, @junk) = split "\t", $_[0];
-    countReadsPerLine($firstRead, $_[0]);
-}
-
 sub countReadsPerLine {
-    my $firstRead = $_[0];
-    $firstRead =~ s/:\|.+/:/;
-    my $readNames = $_[1];
-    my @readNameArray = split "\t", $readNames;
+    my ($firstRead, $theRest) = split "\t", $_[0];
+    $firstRead =~ s/:1\|.+/:1/;
+    my @readNameArray = split ",", $theRest;
     for(@readNameArray) {
-        s/^.+:\|//;
+        s/^.+?\|//;
     } 
     for(my $i = 0; $i < @readNameArray; $i++){
         $readNameHash{$firstRead}{$readNameArray[$i]}++;
@@ -1820,35 +2237,30 @@ sub processBlast {
 }
 
 sub processFirstRead {
-#    my ($queryid, $subjectid, $subjectGi, $taxids, $alignmentlength, $identity, $evalue, $bitscore, $sscinames) = split "\t", $_[0];
     my ($queryid, $subjectid, $identity, $alignmentlength, $mismatches, $gapopens, $qstart, $qend, $sstart, $send, $evalue, $bitscore) = split "\t", $_[0];
     $maxBitscore = $bitscore;
-    $queryid =~ s/:\|.+/:/;
-#    print STDERR $queryid, "\t\t\t";
+    $queryid =~ s/:1\|.+/:1/;
     $subjectid =~ s/gi\|//;
     $subjectid =~ s/\|.+//;
-    $identity = ((($qend - $qstart +1) - $mismatches - $gapopens)/ $readLengthHash{$queryid})*100;
-    printHit($queryid,$subjectid,join("\t",$identity, $alignmentlength, $mismatches, $gapopens, $qstart, $qend, $sstart, $send, $evalue, $bitscore)); 
-#    printHit($queryid, $subjectid, join("\t", $identity, $alignmentlength, $evalue, $bitscore, $subjectGi, $sscinames)); 
+    $identity = ((($qend - $qstart +1) - $mismatches - $gapopens)/ $readLengthHash{$queryid}) * 100;
+    printHit($queryid, $subjectid, join("\t", $identity, $alignmentlength, $mismatches, $gapopens, $qstart, $qend, $sstart, $send, $evalue, $bitscore)); 
     $newRead = 0;
 }
 
 sub processOtherReads {
-#    my ($queryid, $subjectid, $subjectGi, $taxids, $alignmentlength, $identity, $evalue, $bitscore, $sscinames) = split "\t", $_[0];
     my ($queryid, $subjectid, $identity, $alignmentlength, $mismatches, $gapopens, $qstart, $qend, $sstart, $send, $evalue, $bitscore) = split "\t", $_[0];
     if($bitscore == $maxBitscore) {
-    $queryid =~ s/:\|.+/:/;
+    $queryid =~ s/:1\|.+/:1/;
     $subjectid =~ s/gi\|//;
     $subjectid =~ s/\|.+//;
-    $identity = ((($qend - $qstart +1) - $mismatches - $gapopens)/ $readLengthHash{$queryid})*100;
-    printHit($queryid,$subjectid,join("\t",$identity, $alignmentlength, $mismatches, $gapopens, $qstart, $qend, $sstart, $send, $evalue, $bitscore)); 
-#    printHit($queryid, $subjectid, join("\t", $identity, $alignmentlength, $evalue, $bitscore, $subjectGi, $sscinames));
+    $identity = ((($qend - $qstart +1) - $mismatches - $gapopens)/ $readLengthHash{$queryid}) * 100;
+    printHit($queryid, $subjectid, join("\t", $identity, $alignmentlength, $mismatches, $gapopens, $qstart, $qend, $sstart, $send, $evalue, $bitscore)); 
     }
 }
 
 sub printHit {
     for my $primerSample (keys %{$readNameHash{$_[0]}}) {
-        print join("\t",$primerSample, $readNameHash{$_[0]}{$primerSample},$_[1],$_[0],$_[2]) . "\n";
+        print join("\t", $primerSample, $readNameHash{$_[0]}{$primerSample}, $_[1], $_[0], $_[2]) . "\n";
     }
 }</code></pre>
 </div>
@@ -1856,33 +2268,14 @@ sub printHit {
 <button class="source bash toggle btn btn-xs btn-primary">
 <span class="glyphicon glyphicon-chevron-down"></span> bash source
 </button>
-<pre style=""><code class="source bash">perl ~/SerreDLab-2/cannonm3/scripts/parseBlastWithNameFileSummaryStatsV6.pl output/blastOut/merged_products.filtered.names output/blastOut/merged_products.unique.filtered.fa output/blastOut/merged_products-blast.tab.gz | gzip > output/blastOut/blastGICountsStats.txt.gz 
+<pre style=""><code class="source bash">parallel -j 10 'perl ~/SerreDLab-2/cannonm3/scripts/parseBlastWithNameFileSummaryStats6.2.pl output/blast/inputFiles/merged_products_{}.Filtered.names output/blast/inputFiles/merged_products_{}.Unique.filtered.fa output/blast/output/merged_products_{}-blast.tab.gz | gzip > output/blast/output/blastGICountsStats_{}.txt.gz' ::: Amoebozoa_18S2 Apicomp18S_365-613 Blastocystis_18S  Diplomonadida_768-1059 Eimeriorina18S_302-730 Kinetoplastida_18S4 M30F2-M264R3 Microsporidia_18S Plasmo18S_883-1126 Platyhelminthes_18S3 Spirur18S_1435-1858 Spirurida_18S2 Trichocephalida_18S2 Parab18S_288-654  
          
-zcat output/blastOut/blastGICountsStats.txt.gz | cut -f 3 | sort | uniq > output/blastOut/gis #make up list of unique gis</code></pre>
+         
+ #make up list of unique gis
+
+parallel -j 10 'zcat output/blast/output/blastGICountsStats_{}.txt.gz | cut -f 3 | sort | uniq | grep -v ^gi$ > output/blast/output/taxonomy/gis_{}.txt' ::: Amoebozoa_18S2 Apicomp18S_365-613 Blastocystis_18S  Diplomonadida_768-1059 Eimeriorina18S_302-730 Kinetoplastida_18S4 M30F2-M264R3 Microsporidia_18S Plasmo18S_883-1126 Platyhelminthes_18S3 Spirur18S_1435-1858 Spirurida_18S2 Trichocephalida_18S2 Parab18S_288-654  </code></pre>
 </div>
-<h2 id="get-the-gi-taxonomy-information-using-jims-primertree-package">Get the GI taxonomy information using Jim’s primertree package</h2>
-<div class="row">
-<button class="source R toggle btn btn-xs btn-primary">
-<span class="glyphicon glyphicon-chevron-down"></span> R source
-</button>
-<pre style=""><code class="source r">library(primerTree)
-gis <- read.delim("output/blastOut/gis", header = F)
-gis <- subset(gis, V1 != "gi")
-
-taxa <- get_taxonomy(gis$V1)
-
-df <- data.frame(matrix(nrow = nrow(taxa), ncol = 0))
-df$gi <- taxa$gi
-df$species <- taxa$species
-df$kingdom <- taxa$kingdom
-df$phylum <- taxa$phylum
-df$class <- taxa$class
-df$order <- taxa$order
-df$family <- taxa$family
-
-write.table(df, file = "output/blastOut/blastTaxaRaw.txt", quote = F, sep = "\t", col.names = T, row.names = F)</code></pre>
-</div>
-<h2 id="keep-only-the-first-two-words-in-the-species-names-to-get-rid-of-subspecies-labels">Keep only the first two words in the species names to get rid of subspecies labels</h2>
+#Get taxonomy using perl ripoff of Jim’s primerTree get_taxonomy function
 <div class="row">
 
 </div>
@@ -1890,33 +2283,166 @@ write.table(df, file = "output/blastOut/blastTaxaRaw.txt", quote = F, sep = "\t"
 <button class="source perl toggle btn btn-xs btn-primary">
 <span class="glyphicon glyphicon-chevron-down"></span> perl source
 </button>
-<pre style=""><code class="source perl">#!usr/bin/perl
-use strict;
+<pre style=""><code class="source perl">#!/usr/bin/perl
 use warnings;
-use English;
- 
-#this script
-##usage should be perl
+use strict;
+use Getopt::Long;
+use Pod::Usage;
 
- 
-while (<>){
-    chomp;
-    my @columns = split "\t";
-    my $species = $columns[1];
-    my @speciesArray = split(" ", $species);
-    if(scalar(@speciesArray)> 2) {
-    $columns[1] = join(" ", $speciesArray[0], $speciesArray[1]);
+
+##############################
+# By Matt Cannon
+# Date: 
+# Last modified: 
+# Title: .pl
+# Purpose: 
+##############################
+
+##############################
+# Options
+##############################
+
+
+my $verbose;
+my $help;
+my $input;
+
+# i = integer, s = string
+GetOptions ("verbose"           => \$verbose,
+            "help"              => \$help,
+            "input=s"       => \$input
+            
+      )
+ or pod2usage(0) && exit;
+
+pod2usage(1) && exit if ($help);
+
+
+##############################
+# Global variables
+##############################
+my $gi2tax = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/elink.fcgi?dbfrom=nuccore&db=taxonomy&id=";
+my $taxQuery = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi?db=taxonomy&retmode=xml&id=";
+my @giList = ("AB000950.1", "AB001726.2");
+my @classesToGet = ("kingdom", "phylum", "class", "order", "family");
+my $counter = 1;
+
+##############################
+# Code
+##############################
+
+
+##############################
+### Stuff
+### More stuff
+
+print "gi\tspecies\t", join "\t", @classesToGet, "\n";
+
+open INPUT1FILE, "$input" or die "Could not open input\nWell, crap\n";
+while (my $gi = <INPUT1FILE>){
+    chomp $gi;
+    my %tempTaxaHash;
+    
+    if($verbose) {
+        print STDERR $counter, "\r";
+        $counter++;
     }
-    print join("\t", @columns),"\n";
-}</code></pre>
+
+    my $gi2taxSearch = "GET \"" . $gi2tax . $gi . "\"";
+    my $gi2taxResponse = `$gi2taxSearch`;
+    if($gi2taxResponse !~ /ERROR/) {
+    
+        $gi2taxResponse =~ s/\n/@/g;
+        $gi2taxResponse =~ s/.+nuccore_taxonomy.+?Id>//;
+        $gi2taxResponse =~ s/<.+//;
+        #print $gi2taxResponse, "\n";
+        
+        my $taxSearch = "GET \"" . $taxQuery . $gi2taxResponse . "\"";
+        my $taxResponse = `$taxSearch`;
+        
+        if($taxResponse !~ /ERROR/) {
+            my $species = $taxResponse;
+            $species =~ s/\n/@/g;
+            $species =~ s/.+?ScientificName>//;
+            $species =~ s/<.+//;
+            print $gi, "\t", $species, "\t";
+            
+            my $taxa = $taxResponse;
+            $taxa =~ s/\n/@/g;
+            $taxa =~ s/.+?LineageEx>//;
+            $taxa =~ s/<LineageEx.+//;
+            my @taxaArray = split "<Taxon>", $taxa;
+            for my $taxon (@taxaArray) {
+                if($taxon =~ "Rank" && $taxon !~ "no rank") {
+                    $taxon =~ s/.+<ScientificName>//;
+                    $taxon =~ s/<\/Rank.+//;
+                    my ($name, $rank) = split "<.+>", $taxon;
+                    $tempTaxaHash{$rank} = $name;
+                    #print STDERR $name, "\t", $rank, "\n";
+                }
+            }
+            for my $printRank (@classesToGet) {
+                if(defined($tempTaxaHash{$printRank})) {
+                    print $tempTaxaHash{$printRank}, "\t";
+                } else {
+                    print "NA\t";
+                }
+            }
+            print "\n";
+        } else {
+            print $gi, "\tNotFound\n";
+        }
+    } else {
+        print $gi, "\tNotFound\n";
+    }
+
+
+#    
+#    print STDERR join("\n", @taxidResponses), "\n"; 
+
+}
+# open INPUT1FILE, "$inputFile1" or die "Could not open first input\nWell, crap\n";
+# while (my $input = <INPUT1FILE>){
+    # chomp $input;
+
+# }
+
+
+#open R1OUTFILE, ">", $outputNameStub . "_R1.fastq";
+
+##############################
+# POD
+##############################
+
+#=pod
+    
+=head SYNOPSIS
+
+Summary:    
+    
+    xxxxxx.pl - generates a consensus for a specified gene in a specified taxa
+    
+Usage:
+
+    perl xxxxxx.pl [options] 
+
+
+=head OPTIONS
+
+Options:
+
+    --verbose
+    --help
+
+=cut</code></pre>
 </div>
 <div class="row">
 <button class="source bash toggle btn btn-xs btn-primary">
 <span class="glyphicon glyphicon-chevron-down"></span> bash source
 </button>
-<pre style=""><code class="source bash">perl ~/SerreDLab-2/cannonm3/scripts/fixSpeciesNameCuyahoga.pl output/blastOut/blastTaxaRaw.txt > output/blastOut/blastTaxaRawSpeciesFixed.txt</code></pre>
+<pre style=""><code class="source bash">parallel -j 10 'perl misc/getTaxa.pl --input output/blast/output/taxonomy/gis_{}.txt > output/blast/output/taxonomy/blastTaxaRaw_{}.txt' ::: Amoebozoa_18S2 Apicomp18S_365-613 Blastocystis_18S  Diplomonadida_768-1059 Eimeriorina18S_302-730 Kinetoplastida_18S4 M30F2-M264R3 Microsporidia_18S Plasmo18S_883-1126 Platyhelminthes_18S3 Spirur18S_1435-1858 Spirurida_18S2 Trichocephalida_18S2 Parab18S_288-654</code></pre>
 </div>
-<h2 id="combine-the-gi-read-count-data-with-taxa-information-but-include-full-taxonomy">Combine the GI read count data with taxa information, but include full taxonomy</h2>
+<p>#Combine the GI read count data with taxa information, but include full taxonomy</p>
 <div class="row">
 
 </div>
@@ -2027,66 +2553,89 @@ while (my $input = <INPUTFILE2>){
 <button class="source bash toggle btn btn-xs btn-primary">
 <span class="glyphicon glyphicon-chevron-down"></span> bash source
 </button>
-<pre style=""><code class="source bash"># move gi to first column  14 cols
-zcat output/blastOut/blastGICountsStats.txt.gz | gawk -F"\t" 'BEGIN {OFS = "\t"} {print $3,$1,$2,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14}' > temp
-
-###########################   Truncated Species Name
-#combine the prior two files by gi number
-perl ~/SerreDLab-2/cannonm3/scripts/combineFilesByFirstXColumnsOrdered.pl 1 output/blastOut/blastTaxaRawSpeciesFixed.txt temp | cut -f 2- > output/blastOut/blastStatsWithTaxaOutputRedundantSpecies.txt 
-
-# keep only one hit per species
-
-###  Check the four numbers
-perl ~/SerreDLab-2/cannonm3/scripts/uniqueFileByColumnsV1.pl 1,2,3,4,14 output/blastOut/blastStatsWithTaxaOutputRedundantSpecies.txt > output/blastOut/blastStatsWithTaxaOutputUniqueSpecies.txt
-
-# concatenate duplicate hits
-perl ~/SerreDLab-2/cannonm3/scripts/concatenateRepeatReadHitsForBlastV2.pl output/blastOut/blastStatsWithTaxaOutputUniqueSpecies.txt > output/blastOut/blastStatsWithTaxaOutputUniqueSpeciesConcatenated.txt
-
-############################ Normal Species Name
-#combine the prior two files by gi number
-perl ~/SerreDLab-2/cannonm3/scripts/combineFilesByFirstXColumnsOrdered.pl 1 output/blastOut/blastTaxaRaw.txt temp | cut -f 2- | perl -pe 's/.+?:\|//' > output/blastOut/blastStatsWithTaxaOutputRedundantSpeciesFullName.txt 
-
-# keep only one hit per species
-
-
-
-###  Check the four numbers
-perl ~/SerreDLab-2/cannonm3/scripts/uniqueFileByColumnsV1.pl 1,2,3,4,14 output/blastOut/blastStatsWithTaxaOutputRedundantSpeciesFullName.txt > output/blastOut/blastStatsWithTaxaOutputUniqueSpeciesFullName.txt
-
-# concatenate duplicate hits
-perl ~/SerreDLab-2/cannonm3/scripts/concatenateRepeatReadHitsForBlastV2.pl output/blastOut/blastStatsWithTaxaOutputUniqueSpeciesFullName.txt > output/blastOut/blastStatsWithTaxaOutputUniqueSpeciesFullNameConcatenated.txt
-
-
-#keep only those hits with greater than 90% identity
-#gawk -F"\t" 'BEGIN {OFS = "\t"} $5>=90 {print $_}' ~/cannonm3/tempdir/blastStatsWithTaxaOutputUniqueSpecies.txt > ~/cannonm3/tempdir/blastStatsWithTaxaOutputUniqueSpecies90PercentIdentity.txt 
-
-
-cat output/blastOut/merged_products.unique.filtered.fa | perl ~/SerreDLab-2/cannonm3/scripts/fastaSeqLength.pl | perl -pe 's/M.+:.{1,2}\|//g' | perl -pe 's/.DS.+\|//' | gzip  > output/blastOut/merged_products.unique.filtered.fastaLengths.txt.gz
-</code></pre>
+<pre style=""><code class="source bash">for primer in Amoebozoa_18S2 Apicomp18S_365-613 Blastocystis_18S  Diplomonadida_768-1059 Eimeriorina18S_302-730 Kinetoplastida_18S4 M30F2-M264R3 Microsporidia_18S Plasmo18S_883-1126 Platyhelminthes_18S3 Spirur18S_1435-1858 Spirurida_18S2 Trichocephalida_18S2 Parab18S_288-654 Bvf224-Bvr507 BYf226-BYr613 FlaviallS_FlaviallAS2 FU3_cFD3 
+do
+  
+  # move gi to first column  14 cols
+  zcat output/blast/output/blastGICountsStats_${primer}.txt.gz | gawk -F"\t" 'BEGIN {OFS = "\t"} {print $3,$1,$2,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14}' > temp
+  
+  ###########################   Truncated Species Name
+  #combine the prior two files by gi number
+  perl ~/SerreDLab-2/cannonm3/scripts/combineFilesByFirstXColumnsOrdered.pl 1 output/blast/output/taxonomy/blastTaxaRaw_${primer}.txt temp | cut -f 2- > output/blast/output/blastStatsWithTaxaOutputRedundantSpecies_${primer}.txt 
+  
+  # keep only one hit per species
+  
+  ###  Check the four numbers
+  perl ~/SerreDLab-2/cannonm3/scripts/uniqueFileByColumnsV1.pl 1,2,3,4,14 output/blast/output/blastStatsWithTaxaOutputRedundantSpecies_${primer}.txt > output/blast/output/blastStatsWithTaxaOutputUniqueSpecies_${primer}.txt
+  
+  # concatenate duplicate hits
+  grep -v "NotFound" output/blast/output/blastStatsWithTaxaOutputUniqueSpecies_${primer}.txt > temp.txt
+  perl ~/SerreDLab-2/cannonm3/scripts/concatenateRepeatReadHitsForBlastV2.pl temp.txt > output/blast/output/blastStatsWithTaxaOutputUniqueSpeciesConcatenated_${primer}.txt
+  
+  ############################ Normal Species Name
+  #combine the prior two files by gi number
+  perl ~/SerreDLab-2/cannonm3/scripts/combineFilesByFirstXColumnsOrdered.pl 1 output/blast/output/taxonomy/blastTaxaRaw_${primer}.txt temp | cut -f 2- | perl -pe 's/.+?:\|//' > output/blast/output/blastStatsWithTaxaOutputRedundantSpeciesFullName_${primer}.txt 
+  
+  # keep only one hit per species
+  
+  
+  
+  ###  Check the four numbers
+  perl ~/SerreDLab-2/cannonm3/scripts/uniqueFileByColumnsV1.pl 1,2,3,4,14 output/blast/output/blastStatsWithTaxaOutputRedundantSpeciesFullName_${primer}.txt > output/blast/output/blastStatsWithTaxaOutputUniqueSpeciesFullName_${primer}.txt
+  
+  # concatenate duplicate hits
+  grep -v "NotFound" output/blast/output/blastStatsWithTaxaOutputUniqueSpeciesFullName_${primer}.txt > temp.txt
+  perl ~/SerreDLab-2/cannonm3/scripts/concatenateRepeatReadHitsForBlastV2.pl temp.txt > output/blast/output/blastStatsWithTaxaOutputUniqueSpeciesFullNameConcatenated_${primer}.txt
+  
+  
+  #keep only those hits with greater than 90% identity
+  #gawk -F"\t" 'BEGIN {OFS = "\t"} $5>=90 {print $_}' ~/cannonm3/tempdir/blastStatsWithTaxaOutputUniqueSpecies.txt > ~/cannonm3/tempdir/blastStatsWithTaxaOutputUniqueSpecies90PercentIdentity.txt 
+  
+  
+#  cat output/blast/output/merged_products.unique.filtered.fa | perl ~/SerreDLab-2/cannonm3/scripts/fastaSeqLength.pl | perl -pe 's/M.+:.{1,2}\|//g' | perl -pe 's/.DS.+\|//' | gzip  > output/blast/output/merged_products.unique.filtered.fastaLengths.txt.gz
+done</code></pre>
 </div>
-<h2 id="summarize-blast-table">Summarize blast table</h2>
+<h2 id="summarize-blast-output-into-a-more-readable-format">Summarize blast output into a more readable format</h2>
 <div class="row">
 <button class="source R toggle btn btn-xs btn-primary">
 <span class="glyphicon glyphicon-chevron-down"></span> R source
 </button>
-<pre style=""><code class="source r">dataDf <- read.delim("output/blastOut/blastStatsWithTaxaOutputUniqueSpeciesFullNameConcatenated.txt", header = T)
+<pre style=""><code class="source r">files <- list.files(path = "output/blast/output/", pattern = "blastStatsWithTaxaOutputUniqueSpeciesFullNameConcatenated_.+", full.names = T )
 
-dataDf$Sample <- gsub("\\|$", "", dataDf$X.primerSample)
-dataDf$Sample <- gsub(".+\\|", "", dataDf$Sample)
+for(primer in files) {
+  baseName <- gsub(".+Concatenated_", "", primer)
+  baseName <- gsub(".txt", "", baseName)
+  
+  dataDf <- read.delim(primer, header = T)
+  
+  dataDf$Sample <- gsub("\\|$", "", dataDf$X.primerSample)
+  dataDf$Sample <- gsub(".+\\|", "", dataDf$Sample)
+  
+  dataDf$Primer <- gsub("\\|.+", "", dataDf$X.primerSample)
+  
+  dataDf$identity <- gsub("\\/.+", "", dataDf$identity)
+  
+  dataDf$alignmentlength <- gsub("\\/.+", "", dataDf$alignmentlength)
+  
+  wantedCols <- c("Primer", "Sample", "count", "identity", "alignmentlength", "species", "superkingdom", "kingdom", "phylum", "class", "order", "family")
+  
+  dataDf <- dataDf[, colnames(dataDf) %in% wantedCols]
+  
+  summaryDf <- ddply(dataDf, .(Primer, Sample, species, kingdom, phylum, class, order, family), summarize, count = sum(count), maxIdent = max(as.numeric(identity)), maxAlignLen = max(as.numeric(alignmentlength)))
+  
+  write.table(summaryDf, file = paste( "output/blast/output/blastStatsWithTaxaOutputUniqueSpeciesFullNameConcatenatedSummary_", baseName, ".txt", sep = ""), quote = F, sep = "\t", col.names = T, row.names = F)
+  
+}</code></pre>
+</div>
+<h2 id="combine-data-from-all-primers">Combine data from all primers</h2>
+<div class="row">
+<button class="source bash toggle btn btn-xs btn-primary">
+<span class="glyphicon glyphicon-chevron-down"></span> bash source
+</button>
+<pre style=""><code class="source bash">cat output/blast/output/blastStatsWithTaxaOutputUniqueSpeciesFullNameConcatenatedSummary_*.txt | head -n 1 > output/blast/output/blastStatsWithTaxaOutputUniqueSpeciesFullNameConcatenatedSummary_AllPrimers.txt
 
-dataDf$Primer <- gsub("\\|.+", "", dataDf$X.primerSample)
-
-dataDf$identity <- gsub("\\/.+", "", dataDf$identity)
-
-dataDf$alignmentlength <- gsub("\\/.+", "", dataDf$alignmentlength)
-
-wantedCols <- c("Primer", "Sample", "count", "identity", "alignmentlength", "species", "kingdom", "phylum", "class", "order", "family")
-
-dataDf <- dataDf[, colnames(dataDf) %in% wantedCols]
-
-summaryDf <- ddply(dataDf, .(Primer, Sample, species, kingdom, phylum, class, order, family), summarize, count = sum(count), maxIdent = max(as.numeric(identity)), maxAlignLen = max(as.numeric(alignmentlength)))
-
-write.table(summaryDf, file = "output/blastOut/blastStatsWithTaxaOutputUniqueSpeciesFullNameConcatenatedSummary.txt", quote = F, sep = "\t", col.names = T, row.names = F)</code></pre>
+grep -h -v "maxAlignLen" output/blast/output/blastStatsWithTaxaOutputUniqueSpeciesFullNameConcatenatedSummary_*.txt >> output/blast/output/blastStatsWithTaxaOutputUniqueSpeciesFullNameConcatenatedSummary_AllPrimers.txt
+</code></pre>
 </div>
 </div>
 </div>
